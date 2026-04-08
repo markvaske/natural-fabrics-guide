@@ -1,6 +1,45 @@
 // Tool: Planner (Projects) — loaded by router on first visit to #projects
 // Data globals (FIBERS, PROJECT_CATALOG, etc.) are assigned by router before this runs.
 (function() {
+
+// Expose critical functions to window immediately (hoisted declarations available)
+// Each assignment wrapped individually so one failure doesn't block the rest.
+var _expose = function(name, fn) { try { window[name] = fn; } catch(e) {} };
+_expose('renderProfileCards', renderProfileCards);
+_expose('renderStashView', renderStashView);
+_expose('renderStashWorkshop', renderStashWorkshop);
+_expose('renderGpProfile', renderGpProfile);
+_expose('renderGpTools', renderGpTools);
+_expose('renderGpPlans', renderGpPlans);
+_expose('showHome', showHome);
+_expose('showView', showView);
+_expose('plShowView', showView);
+_expose('openPeopleEditor', openPeopleEditor);
+_expose('openStashEditor', openStashEditor);
+_expose('openGlobalProfile', openGlobalProfile);
+_expose('plShowNewGroupModal', plShowNewGroupModal);
+_expose('plAddMemberToGroup', plAddMemberToGroup);
+_expose('plAddPersonToGroupPrompt', plAddPersonToGroupPrompt);
+_expose('plShowModal', plShowModal);
+_expose('plCloseModal', plCloseModal);
+_expose('navigateToTechnique', navigateToTechnique);
+_expose('ffSetSort', ffSetSort);
+_expose('ffToggleVariety', ffToggleVariety);
+_expose('ffToggleFiber', ffToggleFiber);
+_expose('ffSelectVariety', ffSelectVariety);
+_expose('togglePropLegend', togglePropLegend);
+_expose('ffResetFilters', ffResetFilters);
+_expose('ffUpdateFilter', ffUpdateFilter);
+_expose('activatePipeline', activatePipeline);
+_expose('plAddProfile', plAddProfile);
+_expose('plShowEditForm', plShowEditForm);
+_expose('plDeleteProfile', plDeleteProfile);
+_expose('plSaveProfile', plSaveProfile);
+_expose('plCancelEdit', plCancelEdit);
+_expose('plDeleteStashEntry', plDeleteStashEntry);
+_expose('plGoToTab', plGoToTab);
+_expose('renderFabricRecommendations', renderFabricRecommendations);
+
 // ═══════════════════════════════════════════════════════════════
 // MODE CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
@@ -2634,108 +2673,483 @@ function plMeasLabel(key) {
   return labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
 }
 
+// ── People view state ──
+let plPeopleDrilledGroup = null; // group id if drilled into a group, null otherwise
+
 function renderProfileCards(data) {
-  const wrap = document.getElementById('plProfileView');
-  const selectedId = wrap.dataset.selectedPerson || (data.profiles[0] && data.profiles[0].id) || null;
+  const listEl = document.getElementById('plPeopleList');
+  const detailEl = document.getElementById('plProfileView');
+  if (!listEl || !detailEl) return;
 
-  // ── Horizontal people row ──
+  const selectedId = detailEl.dataset.selectedPerson || (data.profiles[0] && data.profiles[0].id) || null;
   const AGE_LABELS = {adult:'Adult',teen:'Teen',child:'Child',baby:'Baby'};
-  const SKILL_LABELS = {beginner:'Beginner',intermediate:'Intermediate',advanced:'Advanced',expert:'Expert',none:'Non-sewist'};
-  const chipsHtml = data.profiles.map((p, idx) => {
-    const avatarColor = p.avatar?.color || '#5B8C6B';
-    const avatarContent = p.photo
-      ? '<img src="' + p.photo + '">'
-      : (p.avatar?.letter || p.name.charAt(0).toUpperCase());
-    const sel = p.id === selectedId ? ' selected' : '';
-    const skillText = (p.skill && p.skill !== 'none' && SKILL_LABELS[p.skill]) ? SKILL_LABELS[p.skill] : '';
-    const ageText = p.ageGroup ? AGE_LABELS[p.ageGroup] || '' : '';
-    const sizeText = p.topSize ? p.topSize.toUpperCase() : (p.preferredSize ? p.preferredSize.toUpperCase() : '');
-    const metaLine = [skillText, ageText, sizeText].filter(Boolean).join(' · ') || 'Not set up';
-    const meTag = idx === 0 ? ' <span class="pl-people-chip-me">Me</span>' : '';
-    const favCount = (p.favoriteProjects || []).length;
-    const planCount = (p.savedPlans || []).length;
-    const countsHtml = (favCount || planCount) ? '<div class="pl-people-chip-counts">'
-      + (favCount ? '<span>\u2665 ' + favCount + ' fav</span>' : '')
-      + (planCount ? '<span>\u25B6 ' + planCount + ' plan' + (planCount > 1 ? 's' : '') + '</span>' : '')
-      + '</div>' : '';
-    return `<div class="pl-people-chip${sel}" data-person-id="${p.id}">
-      <div class="pl-people-chip-avatar" style="background:${avatarColor};">${avatarContent}</div>
-      <div class="pl-people-chip-info">
-        <div class="pl-people-chip-name">${p.name}${meTag}</div>
-        <div class="pl-people-chip-meta">${metaLine}</div>
-        ${countsHtml}
-      </div>
-    </div>`;
-  }).join('');
+  const groups = data.groups || [];
+  const tailorMode = data.profile && data.profile.tailorMode;
 
-  const addChip = `<div class="pl-people-chip-add" onclick="plAddProfile()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 5v14M5 12h14"/></svg>
-    <div class="pl-people-chip-name" style="color:var(--ink-faint);">Add</div>
-  </div>`;
-
-  // ── Selected person detail panel ──
-  const p = data.profiles.find(pr => pr.id === selectedId);
-  let detailHtml = '';
-  if (p) {
-    const avatarColor = p.avatar?.color || '#5B8C6B';
-    const avatarContent = p.photo
-      ? '<img src="' + p.photo + '">'
-      : (p.avatar?.letter || p.name.charAt(0).toUpperCase());
-    // Build tag chips for header
-    const detailTags = [];
-    if (p.gender) detailTags.push(p.gender.charAt(0).toUpperCase() + p.gender.slice(1));
-    if (p.ageGroup) detailTags.push(AGE_LABELS[p.ageGroup] || p.ageGroup);
-    if (p.skill && SKILL_LABELS[p.skill]) detailTags.push(SKILL_LABELS[p.skill]);
-    if (p.topSize) detailTags.push('Top ' + p.topSize.toUpperCase());
-    if (p.bottomSize) detailTags.push('Bottom ' + p.bottomSize.toUpperCase());
-    if (p.shoeSize) detailTags.push('Shoe ' + p.shoeSize);
-    if (p.cupSize && p.gender !== 'male') detailTags.push('Cup ' + p.cupSize);
-    if (!p.topSize && !p.bottomSize && p.preferredSize) detailTags.push('Size ' + p.preferredSize.toUpperCase());
-    if (p.fit) detailTags.push(p.fit.charAt(0).toUpperCase() + p.fit.slice(1) + ' fit');
-    const tagsHtml = detailTags.length ? '<div class="pl-person-detail-tags">' + detailTags.map(t => '<span class="pl-person-detail-tag">' + t + '</span>').join('') + '</div>' : '<div class="pl-person-detail-meta">Tap Edit to set up profile</div>';
-
-    detailHtml = `<div class="pl-person-detail-panel">
-      <div class="pl-person-detail-header">
-        <div class="pl-person-detail-avatar" style="background:${avatarColor};">${avatarContent}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="pl-person-detail-name">${p.name}</div>
-          ${tagsHtml}
-        </div>
-        <div class="pl-person-detail-actions">
-          <button class="pl-btn-secondary" style="font-size:0.78rem;padding:5px 12px;" onclick="plShowEditForm('${p.id}')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Edit
-          </button>
-          ${data.profiles.length > 1 ? '<button class="pl-btn-secondary" style="font-size:0.78rem;padding:5px 12px;color:#c0392b;" onclick="plDeleteProfile(\'' + p.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' : ''}
-        </div>
-      </div>
-      <div class="pl-profile-display" id="plDisplay-${p.id}">
-        <div class="pl-detail-grid">
-          <div>${renderMeasurements(p)}</div>
-          <div>
-            ${renderFavFibers(p)}
-            ${renderFavColors(p)}
-            ${renderSensitivities(p)}
-          </div>
-        </div>
-        ${renderFavProjects(p)}
-        ${renderWantToMake(p)}
-      </div>
-      <div class="pl-profile-edit" id="plEdit-${p.id}" style="display:none;"></div>
-    </div>`;
+  // ── Build left panel ──
+  if (plPeopleDrilledGroup) {
+    plRenderGroupDrillIn(listEl, data, plPeopleDrilledGroup, selectedId);
+  } else {
+    plRenderPeopleList(listEl, data, groups, selectedId, tailorMode);
   }
 
-  wrap.innerHTML = `<div class="pl-people-row">${chipsHtml}${addChip}</div>${detailHtml}`;
-  wrap.dataset.selectedPerson = selectedId;
+  // ── Build right panel (person detail) ──
+  const p = data.profiles.find(pr => pr.id === selectedId);
+  if (p) {
+    plRenderPersonDetail(detailEl, data, p, groups);
+  } else {
+    detailEl.innerHTML = '<div class="pl-people-empty"><div class="pl-people-empty-icon">👤</div><div class="pl-people-empty-title">Select a person</div><div class="pl-people-empty-text">Choose someone from the list to view their measurements, preferences, and project history.</div></div>';
+  }
 
-  // ── Chip click handlers ──
-  wrap.querySelectorAll('.pl-people-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      wrap.dataset.selectedPerson = chip.dataset.personId;
+  detailEl.dataset.selectedPerson = selectedId;
+}
+
+function plRenderPeopleList(listEl, data, groups, selectedId, showGroups) {
+  const AGE_LABELS = {adult:'Adult',teen:'Teen',child:'Child',baby:'Baby'};
+  const addSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M12 5v14M5 12h14"/></svg>';
+
+  let html = '<div class="pl-people-list-hdr"><span class="pl-people-list-title">People</span></div>';
+
+  // Groups section (if any exist or tailorMode)
+  if (groups.length > 0 || showGroups) {
+    html += '<div class="pl-people-sec-hdr"><span class="pl-people-sec-label">Groups</span>';
+    html += '<button class="pl-people-sec-add" title="New group" data-action="new-group">' + addSvg + '</button></div>';
+    groups.forEach(g => {
+      const memberCount = (g.memberIds || []).length;
+      const projCount = (g.projects || []).length;
+      const meta = [memberCount + ' people', projCount ? projCount + ' project' + (projCount > 1 ? 's' : '') : ''].filter(Boolean).join(' · ');
+      html += '<div class="pl-people-gi" data-group-id="' + g.id + '">';
+      html += '<div class="pl-people-gi-icon">' + (g.icon || '📋') + '</div>';
+      html += '<div class="pl-people-gi-info"><div class="pl-people-gi-name">' + g.name + '</div>';
+      html += '<div class="pl-people-gi-meta">' + meta + '</div></div>';
+      html += '<span class="pl-people-gi-chev">▶</span></div>';
+    });
+  }
+
+  // People section
+  html += '<div class="pl-people-sec-hdr"><span class="pl-people-sec-label">All People</span>';
+  html += '<button class="pl-people-sec-add" title="Add person" data-action="add-person">' + addSvg + '</button></div>';
+
+  data.profiles.forEach((p, idx) => {
+    const avatarColor = p.avatar?.color || '#5B8C6B';
+    const avatarContent = p.photo ? '<img src="' + p.photo + '" style="width:100%;height:100%;object-fit:cover;">' : (p.avatar?.letter || p.name.charAt(0).toUpperCase());
+    const sel = p.id === selectedId ? ' selected' : '';
+    const ageText = p.ageGroup ? AGE_LABELS[p.ageGroup] || '' : '';
+    const sizeText = p.topSize ? 'Size ' + p.topSize.toUpperCase() : (p.preferredSize ? 'Size ' + p.preferredSize.toUpperCase() : '');
+    const measCount = p.measurements ? Object.keys(p.measurements).filter(k => p.measurements[k]).length : 0;
+    const measText = measCount ? measCount + ' meas.' : '';
+    const metaLine = [ageText, sizeText, measText].filter(Boolean).join(' · ') || 'Not set up';
+    const meTag = idx === 0 ? '<span class="pl-people-me-badge">Me</span>' : '';
+
+    html += '<div class="pl-people-li' + sel + '" data-person-id="' + p.id + '">';
+    html += '<div class="pl-people-li-av" style="background:' + avatarColor + ';">' + avatarContent + '</div>';
+    html += '<div class="pl-people-li-info"><div class="pl-people-li-name">' + p.name + meTag + '</div>';
+    html += '<div class="pl-people-li-meta">' + metaLine + '</div></div></div>';
+  });
+
+  listEl.innerHTML = html;
+
+  // Attach click handlers
+  listEl.querySelectorAll('.pl-people-li').forEach(li => {
+    li.addEventListener('click', () => {
+      document.getElementById('plProfileView').dataset.selectedPerson = li.dataset.personId;
       renderProfileCards(loadUserData());
     });
   });
+  listEl.querySelectorAll('.pl-people-gi').forEach(gi => {
+    gi.addEventListener('click', () => {
+      plPeopleDrilledGroup = gi.dataset.groupId;
+      renderProfileCards(loadUserData());
+    });
+  });
+  // Section action buttons
+  var addPersonBtn = listEl.querySelector('[data-action="add-person"]');
+  if (addPersonBtn) addPersonBtn.addEventListener('click', (e) => { e.stopPropagation(); plAddProfile(); });
+  var newGroupBtn = listEl.querySelector('[data-action="new-group"]');
+  if (newGroupBtn) newGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); plShowNewGroupModal(); });
 }
+
+function plRenderGroupDrillIn(listEl, data, groupId, selectedId) {
+  const group = (data.groups || []).find(g => g.id === groupId);
+  if (!group) { plPeopleDrilledGroup = null; plRenderPeopleList(listEl, data, data.groups || [], selectedId, data.profile?.tailorMode); return; }
+
+  const addSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M12 5v14M5 12h14"/></svg>';
+
+  let html = '<div class="pl-people-list-hdr">';
+  html += '<span class="pl-people-bc"><span class="pl-people-bc-link" data-action="back-to-people">People</span>';
+  html += '<span class="pl-people-bc-sep">›</span>';
+  html += '<span class="pl-people-bc-cur">' + group.name + '</span></span></div>';
+
+  // Group overview row
+  html += '<div class="pl-people-gi" data-show-group="' + groupId + '" style="border-bottom:1px solid var(--border);">';
+  html += '<div class="pl-people-gi-icon">' + (group.icon || '📋') + '</div>';
+  html += '<div class="pl-people-gi-info"><div class="pl-people-gi-name">' + group.name + '</div>';
+  html += '<div class="pl-people-gi-meta">' + (group.memberIds || []).length + ' members</div></div></div>';
+
+  // Members
+  html += '<div class="pl-people-sec-hdr"><span class="pl-people-sec-label">Members</span>';
+  html += '<button class="pl-people-sec-add" title="Add member" data-action="add-member" data-group="' + groupId + '">' + addSvg + '</button></div>';
+
+  const AGE_LABELS = {adult:'Adult',teen:'Teen',child:'Child',baby:'Baby'};
+  (group.memberIds || []).forEach(pid => {
+    const p = data.profiles.find(pr => pr.id === pid);
+    if (!p) return;
+    const avatarColor = p.avatar?.color || '#5B8C6B';
+    const avatarContent = p.avatar?.letter || p.name.charAt(0).toUpperCase();
+    const sel = p.id === selectedId ? ' selected' : '';
+    const sizeText = p.topSize ? 'Size ' + p.topSize.toUpperCase() : '';
+    const ageText = p.ageGroup ? AGE_LABELS[p.ageGroup] || '' : '';
+    const meta = [ageText, sizeText].filter(Boolean).join(' · ') || 'Not set up';
+
+    html += '<div class="pl-people-li' + sel + '" data-person-id="' + p.id + '" style="padding-left:28px;">';
+    html += '<div class="pl-people-li-av" style="background:' + avatarColor + ';width:32px;height:32px;font-size:0.78rem;">' + avatarContent + '</div>';
+    html += '<div class="pl-people-li-info"><div class="pl-people-li-name">' + p.name + '</div>';
+    html += '<div class="pl-people-li-meta">' + meta + '</div></div></div>';
+  });
+
+  listEl.innerHTML = html;
+
+  // Attach handlers
+  listEl.querySelectorAll('.pl-people-li').forEach(li => {
+    li.addEventListener('click', () => {
+      document.getElementById('plProfileView').dataset.selectedPerson = li.dataset.personId;
+      renderProfileCards(loadUserData());
+    });
+  });
+  listEl.querySelectorAll('[data-show-group]').forEach(gi => {
+    gi.addEventListener('click', () => {
+      document.getElementById('plProfileView').dataset.selectedPerson = '';
+      renderProfileCards(loadUserData());
+    });
+  });
+  // Breadcrumb back
+  var backLink = listEl.querySelector('[data-action="back-to-people"]');
+  if (backLink) backLink.addEventListener('click', () => { plPeopleDrilledGroup = null; renderProfileCards(loadUserData()); });
+  // Add member button
+  var addMemberBtn = listEl.querySelector('[data-action="add-member"]');
+  if (addMemberBtn) addMemberBtn.addEventListener('click', (e) => { e.stopPropagation(); plAddMemberToGroup(addMemberBtn.dataset.group); });
+}
+
+function plRenderPersonDetail(detailEl, data, p, groups) {
+  const AGE_LABELS = {adult:'Adult',teen:'Teen',child:'Child',baby:'Baby'};
+  const avatarColor = p.avatar?.color || '#5B8C6B';
+  const avatarContent = p.photo ? '<img src="' + p.photo + '" style="width:100%;height:100%;object-fit:cover;border-radius:13px;">' : (p.avatar?.letter || p.name.charAt(0).toUpperCase());
+
+  // Subtitle
+  const subParts = [];
+  if (p.gender) subParts.push(p.gender.charAt(0).toUpperCase() + p.gender.slice(1));
+  if (p.ageGroup) subParts.push(AGE_LABELS[p.ageGroup] || p.ageGroup);
+
+  // Sizing bar items
+  const szItems = [];
+  szItems.push({ val: p.topSize ? p.topSize.toUpperCase() : null, label: 'Top' });
+  szItems.push({ val: p.bottomSize || null, label: 'Bottom' });
+  if (p.gender === 'female' && p.cupSize) szItems.push({ val: p.cupSize, label: 'Cup' });
+  szItems.push({ val: p.shoeSize || null, label: 'Shoe' });
+  szItems.push({ val: p.fit ? p.fit.charAt(0).toUpperCase() + p.fit.slice(1) : null, label: 'Fit' });
+
+  const szHtml = '<div class="pl-people-sz">' + szItems.map(s =>
+    '<div class="pl-people-sz-item"><div class="' + (s.val ? 'pl-people-sz-val' : 'pl-people-sz-empty') + '">' + (s.val || '—') + '</div><div class="pl-people-sz-label">' + s.label + '</div></div>'
+  ).join('') + '</div>';
+
+  // Check if person has any measurements
+  const hasMeas = p.measurements && Object.keys(p.measurements).some(k => p.measurements[k]);
+  const hasAnyData = hasMeas || (p.favoriteFibers && p.favoriteFibers.length) || (p.favoriteColors && p.favoriteColors.length);
+
+  let cardsHtml = '';
+
+  if (!hasAnyData && !p.topSize && !p.bottomSize) {
+    // Empty state
+    cardsHtml = '<div class="pl-people-card" style="grid-column:1/-1;"><div class="pl-people-empty"><div class="pl-people-empty-icon">📏</div><div class="pl-people-empty-title">No measurements yet</div><div class="pl-people-empty-text">Set up ' + p.name + '\'s profile to add measurements, sizing, and preferences. This helps with yardage estimates and project planning.</div><button class="pl-btn-primary" style="margin-top:16px;" data-action="edit-person" data-person="' + p.id + '">Set Up Profile</button></div></div>';
+  } else {
+    // Measurements card
+    if (hasMeas) {
+      cardsHtml += '<div class="pl-people-card"><div class="pl-people-card-title">Body Measurements</div>';
+      cardsHtml += plRenderMeasurementsGrouped(p);
+      cardsHtml += '</div>';
+    }
+
+    // Preferences card
+    cardsHtml += '<div class="pl-people-card"><div class="pl-people-card-title">Preferences</div>';
+    cardsHtml += renderFavFibers(p);
+    cardsHtml += renderFavColors(p);
+    cardsHtml += renderSensitivities(p);
+    if (!(p.favoriteFibers?.length) && !(p.favoriteColors?.length) && !(p.sensitivities?.length)) {
+      cardsHtml += '<p style="font-size:0.78rem;color:var(--ink-faint);font-style:italic;">No preferences set yet</p>';
+    }
+    cardsHtml += '</div>';
+
+    // Projects card
+    const history = p.projectHistory || [];
+    const wantToMake = p.wantToMake || [];
+    if (history.length || wantToMake.length) {
+      cardsHtml += '<div class="pl-people-card"><div class="pl-people-card-title">Projects</div>';
+      cardsHtml += renderFavProjects(p);
+      cardsHtml += renderWantToMake(p);
+      cardsHtml += '</div>';
+    }
+
+    // Groups card
+    const personGroups = groups.filter(g => (g.memberIds || []).includes(p.id));
+    cardsHtml += '<div class="pl-people-card"><div class="pl-people-card-title">Groups</div>';
+    cardsHtml += '<div class="pl-people-grp-chips">';
+    personGroups.forEach(g => {
+      cardsHtml += '<span class="pl-people-grp-chip" data-drill-group="' + g.id + '"><span style="font-size:0.8rem;">' + (g.icon || '📋') + '</span> ' + g.name + '</span>';
+    });
+    cardsHtml += '<span class="pl-people-grp-add" data-action="add-to-group" data-person="' + p.id + '">+ Add to group</span>';
+    cardsHtml += '</div></div>';
+  }
+
+  const deleteBtn = data.profiles.length > 1 ? '<button class="pl-btn-secondary" style="padding:7px 10px;" data-action="delete-person" data-person="' + p.id + '"><svg viewBox="0 0 24 24" fill="none" stroke="#c0392b" stroke-width="1.5" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' : '';
+
+  detailEl.innerHTML = `
+    <div class="pl-people-dh">
+      <div class="pl-people-dh-av" style="background:${avatarColor};">${avatarContent}</div>
+      <div class="pl-people-dh-info">
+        <div class="pl-people-dh-name">${p.name}</div>
+        <div class="pl-people-dh-sub">${subParts.join(' · ') || 'No details set'}</div>
+      </div>
+      <div class="pl-people-dh-acts">
+        <button class="pl-btn-primary" style="font-size:0.76rem;padding:7px 16px;" data-action="edit-person" data-person="${p.id}">Edit</button>
+        ${deleteBtn}
+      </div>
+    </div>
+    ${szHtml}
+    <div class="pl-people-cards" id="plDisplay-${p.id}">
+      ${cardsHtml}
+    </div>
+    <div class="pl-profile-edit" id="plEdit-${p.id}" style="display:none;"></div>
+  `;
+
+  // Attach event listeners for detail panel actions
+  detailEl.querySelectorAll('[data-action="edit-person"]').forEach(btn => {
+    btn.addEventListener('click', () => plShowEditForm(btn.dataset.person));
+  });
+  detailEl.querySelectorAll('[data-action="delete-person"]').forEach(btn => {
+    btn.addEventListener('click', () => plDeleteProfile(btn.dataset.person));
+  });
+  detailEl.querySelectorAll('[data-drill-group]').forEach(chip => {
+    chip.addEventListener('click', () => { plPeopleDrilledGroup = chip.dataset.drillGroup; renderProfileCards(loadUserData()); });
+  });
+  detailEl.querySelectorAll('[data-action="add-to-group"]').forEach(btn => {
+    btn.addEventListener('click', () => plAddPersonToGroupPrompt(btn.dataset.person));
+  });
+}
+
+// Grouped measurements (Upper Body, Core, Arms, Lower Body)
+function plRenderMeasurementsGrouped(p) {
+  if (!p.measurements) return '';
+  const m = p.measurements;
+  const isMale = p.gender === 'male';
+  const groups = [
+    { label: 'Upper Body', keys: [
+      { k: 'bust', n: isMale ? 'Chest' : 'Bust' },
+      { k: 'highBust', n: 'High Bust' },
+      { k: 'shoulder', n: 'Shoulder' },
+      { k: 'neck', n: 'Neck' },
+      { k: 'frontWaistLength', n: 'Front Waist Length' }
+    ]},
+    { label: 'Core', keys: [
+      { k: 'waist', n: 'Waist' },
+      { k: 'hips', n: 'Hips' }
+    ]},
+    { label: 'Arms', keys: [
+      { k: 'armLength', n: 'Arm Length' },
+      { k: 'upperArm', n: 'Upper Arm' }
+    ]},
+    { label: 'Lower Body', keys: [
+      { k: 'inseam', n: 'Inseam' },
+      { k: 'crotchDepth', n: 'Crotch Depth' },
+      { k: 'thigh', n: 'Thigh' },
+      { k: 'knee', n: 'Knee' },
+      { k: 'calf', n: 'Calf' }
+    ]}
+  ];
+
+  let html = '';
+  groups.forEach(group => {
+    const rows = group.keys.filter(k => m[k.k]);
+    if (rows.length === 0) return;
+    html += '<div class="pl-people-meas-group">' + group.label + '</div>';
+    rows.forEach(k => {
+      html += '<div class="pl-people-meas-row"><span class="pl-people-meas-name">' + k.n + '</span><span class="pl-people-meas-val">' + m[k.k] + '″</span></div>';
+    });
+  });
+  return html || '<p style="font-size:0.78rem;color:var(--ink-faint);font-style:italic;">No measurements recorded</p>';
+}
+
+// Placeholder functions for group actions
+// ── Modal helper ──
+function plShowModal(html) {
+  var modal = document.getElementById('plModal');
+  var content = document.getElementById('plModalContent');
+  if (!modal || !content) return;
+  content.innerHTML = html;
+  modal.style.display = 'flex';
+  modal.onclick = function(e) { if (e.target === modal) plCloseModal(); };
+}
+function plCloseModal() {
+  var modal = document.getElementById('plModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function plShowNewGroupModal() {
+  plShowModal(
+    '<div class="pl-modal-header"><div class="pl-modal-title">New Group</div><button class="pl-modal-close" id="plModalClose">✕</button></div>' +
+    '<div class="pl-modal-desc">Choose a template to get started, or create a blank group.</div>' +
+    '<div class="pl-modal-templates">' +
+      '<div class="pl-modal-template" data-template="personal"><div class="pl-modal-template-icon">👨‍👩‍👧</div><div class="pl-modal-template-name">Personal</div><div class="pl-modal-template-desc">Family, friends. Simple organization — name, members, notes.</div></div>' +
+      '<div class="pl-modal-template" data-template="event"><div class="pl-modal-template-icon">🎉</div><div class="pl-modal-template-name">Event</div><div class="pl-modal-template-desc">Wedding, performance. Adds deadline, shared projects, fabric coordination.</div></div>' +
+      '<div class="pl-modal-template" data-template="client"><div class="pl-modal-template-icon">👔</div><div class="pl-modal-template-name">Client / Uniform</div><div class="pl-modal-template-desc">Business, team. Adds contact info, delivery dates, quantity tracking.</div></div>' +
+      '<div class="pl-modal-template" data-template="blank"><div class="pl-modal-template-icon">📋</div><div class="pl-modal-template-name">Blank</div><div class="pl-modal-template-desc">Start from scratch. Just a name — add details as you go.</div></div>' +
+    '</div>'
+  );
+  document.getElementById('plModalClose').addEventListener('click', plCloseModal);
+  document.querySelectorAll('.pl-modal-template').forEach(function(t) {
+    t.addEventListener('click', function() {
+      var template = t.dataset.template;
+      plCloseModal();
+      plCreateGroupFromTemplate(template);
+    });
+  });
+}
+
+function plCreateGroupFromTemplate(template) {
+  var icons = { personal: '👨‍👩‍👧', event: '🎉', client: '👔', blank: '📋' };
+  var data = loadUserData();
+  var id = addGroup(data, { name: 'New Group', icon: icons[template] || '📋', template: template });
+  // Drill into the new group
+  plPeopleDrilledGroup = id;
+  renderProfileCards(loadUserData());
+}
+
+function plAddProfile() {
+  // Create a blank person and immediately open edit form
+  var colors = ['#5B8C6B','#C17B7B','#7B6BA0','#4A8B9B','#B8860B','#8B5A8B','#A0522D','#6B9B6B'];
+  var data = loadUserData();
+  var color = colors[data.profiles.length % colors.length];
+  var id = addProfile(data, { name: 'New Person', avatar: { letter: '?', color: color } });
+  var wrap = document.getElementById('plProfileView');
+  if (wrap) wrap.dataset.selectedPerson = id;
+  renderProfileCards(loadUserData());
+  plShowEditForm(id);
+}
+
+function plAddMemberToGroup(groupId) {
+  var data = loadUserData();
+  var group = (data.groups || []).find(function(g) { return g.id === groupId; });
+  if (!group) return;
+  var existing = group.memberIds || [];
+  var available = data.profiles.filter(function(p) { return !existing.includes(p.id); });
+
+  var html = '<div class="pl-modal-header"><div class="pl-modal-title">Add Member</div><button class="pl-modal-close" id="plModalClose">✕</button></div>';
+  html += '<input type="text" class="pl-modal-search" placeholder="Search people..." id="plModalSearch">';
+  html += '<div class="pl-modal-person-list" id="plModalPersonList">';
+
+  if (available.length === 0) {
+    html += '<div style="padding:16px;text-align:center;color:var(--ink-faint);font-size:0.85rem;">All people are already in this group</div>';
+  } else {
+    available.forEach(function(p) {
+      var av = p.avatar?.color || '#888';
+      var letter = p.avatar?.letter || p.name.charAt(0).toUpperCase();
+      var meta = [p.ageGroup || '', p.topSize ? 'Size ' + p.topSize.toUpperCase() : ''].filter(Boolean).join(' · ') || '';
+      html += '<div class="pl-modal-person" data-person-id="' + p.id + '">';
+      html += '<div class="pl-modal-person-av" style="background:' + av + ';">' + letter + '</div>';
+      html += '<div><div class="pl-modal-person-name">' + p.name + '</div>';
+      if (meta) html += '<div class="pl-modal-person-meta">' + meta + '</div>';
+      html += '</div></div>';
+    });
+  }
+
+  html += '</div>';
+  html += '<div class="pl-modal-create-opt" id="plModalCreatePerson"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 5v14M5 12h14"/></svg> Create new person</div>';
+
+  plShowModal(html);
+  document.getElementById('plModalClose').addEventListener('click', plCloseModal);
+
+  // Person selection
+  document.querySelectorAll('.pl-modal-person').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var personId = el.dataset.personId;
+      var d = loadUserData();
+      addPersonToGroup(d, groupId, personId);
+      plCloseModal();
+      renderProfileCards(loadUserData());
+    });
+  });
+
+  // Create new person
+  document.getElementById('plModalCreatePerson').addEventListener('click', function() {
+    plCloseModal();
+    // Create person, add to group, show edit form
+    var colors = ['#5B8C6B','#C17B7B','#7B6BA0','#4A8B9B','#B8860B','#8B5A8B','#A0522D','#6B9B6B'];
+    var d = loadUserData();
+    var color = colors[d.profiles.length % colors.length];
+    var pid = addProfile(d, { name: 'New Person', avatar: { letter: '?', color: color } });
+    d = loadUserData();
+    addPersonToGroup(d, groupId, pid);
+    var wrap = document.getElementById('plProfileView');
+    if (wrap) wrap.dataset.selectedPerson = pid;
+    renderProfileCards(loadUserData());
+    plShowEditForm(pid);
+  });
+
+  // Search filter
+  var searchInput = document.getElementById('plModalSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      var q = searchInput.value.toLowerCase();
+      document.querySelectorAll('.pl-modal-person').forEach(function(el) {
+        var name = el.querySelector('.pl-modal-person-name').textContent.toLowerCase();
+        el.style.display = name.includes(q) ? '' : 'none';
+      });
+    });
+    searchInput.focus();
+  }
+}
+
+function plAddPersonToGroupPrompt(personId) {
+  var data = loadUserData();
+  var groups = data.groups || [];
+  var memberOf = groups.filter(function(g) { return (g.memberIds || []).includes(personId); });
+  var available = groups.filter(function(g) { return !(g.memberIds || []).includes(personId); });
+
+  var html = '<div class="pl-modal-header"><div class="pl-modal-title">Add to Group</div><button class="pl-modal-close" id="plModalClose">✕</button></div>';
+
+  if (available.length === 0 && groups.length > 0) {
+    html += '<div style="padding:16px;text-align:center;color:var(--ink-faint);font-size:0.85rem;">Already in all groups</div>';
+  } else if (available.length > 0) {
+    available.forEach(function(g) {
+      var count = (g.memberIds || []).length;
+      html += '<div class="pl-modal-group" data-group-id="' + g.id + '">';
+      html += '<div class="pl-modal-group-icon">' + (g.icon || '📋') + '</div>';
+      html += '<div><div class="pl-modal-group-name">' + g.name + '</div>';
+      html += '<div class="pl-modal-group-meta">' + count + ' member' + (count !== 1 ? 's' : '') + '</div></div></div>';
+    });
+  }
+
+  html += '<div class="pl-modal-create-opt" id="plModalCreateGroup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 5v14M5 12h14"/></svg> Create new group</div>';
+
+  plShowModal(html);
+  document.getElementById('plModalClose').addEventListener('click', plCloseModal);
+
+  document.querySelectorAll('.pl-modal-group').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var d = loadUserData();
+      addPersonToGroup(d, el.dataset.groupId, personId);
+      plCloseModal();
+      renderProfileCards(loadUserData());
+    });
+  });
+
+  document.getElementById('plModalCreateGroup').addEventListener('click', function() {
+    plCloseModal();
+    plShowNewGroupModal();
+  });
+}
+
+// Legacy renderProfileCards kept the old function signature —
+// the existing code in renderPipelineProfile etc. calls it with (data)
 
 // ── Profile edit form ──
 function plShowEditForm(profileId) {
@@ -3529,6 +3943,147 @@ function plAttachColorTier2Listeners(form) {
       if (preview) preview.textContent = chip.dataset.colorHex;
     });
   });
+}
+
+// ── Stash/Workshop view state ──
+let plStashPanel = 'all-materials';
+
+function renderStashWorkshop(data) {
+  const leftEl = document.getElementById('plStashLeft');
+  const rightEl = document.getElementById('plStashRight');
+  if (!leftEl) { renderStashView(data); return; }
+
+  const stash = data.stash || [];
+  const prof = data.profile || {};
+  const ownedTools = prof.ownedTools || {};
+  const fiberSet = {};
+  stash.forEach(e => {
+    if (!fiberSet[e.fiber]) fiberSet[e.fiber] = { count: 0, yd: 0 };
+    fiberSet[e.fiber].count++;
+    fiberSet[e.fiber].yd += (e.yardage || 0);
+  });
+  const totalBolts = stash.length;
+  const totalYd = stash.reduce((s, e) => s + (e.yardage || 0), 0);
+
+  const equipCounts = {
+    machines: (ownedTools.machines || []).length,
+    cutting: (ownedTools.cutting || []).length,
+    pressing: (ownedTools.pressing || []).length,
+    measuring: ((ownedTools.measuring || []).length + (ownedTools.marking || []).length)
+  };
+  const equipItems = [
+    { id: 'machines', icon: '🧵', name: 'Machines', count: equipCounts.machines },
+    { id: 'cutting', icon: '✂️', name: 'Cutting', count: equipCounts.cutting },
+    { id: 'pressing', icon: '♨️', name: 'Pressing', count: equipCounts.pressing },
+    { id: 'measuring', icon: '📏', name: 'Measuring & Marking', count: equipCounts.measuring }
+  ];
+  const addSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M12 5v14M5 12h14"/></svg>';
+
+  let lhtml = '<div class="pl-stash-left-hdr"><span class="pl-stash-left-title">Stash</span></div>';
+  lhtml += '<div class="pl-stash-sec-hdr"><span class="pl-stash-sec-label">Equipment</span></div>';
+  equipItems.forEach(eq => {
+    const sel = plStashPanel === eq.id ? ' selected' : '';
+    lhtml += '<div class="pl-stash-li' + sel + '" data-panel="' + eq.id + '"><div class="pl-stash-li-icon equip">' + eq.icon + '</div><div class="pl-stash-li-info"><div class="pl-stash-li-name">' + eq.name + '</div><div class="pl-stash-li-meta">' + eq.count + ' owned</div></div></div>';
+  });
+
+  lhtml += '<div class="pl-stash-sec-hdr"><span class="pl-stash-sec-label">Materials</span><button class="pl-people-sec-add" title="Add fabric" data-action="add-fabric">' + addSvg + '</button></div>';
+  const allSel = plStashPanel === 'all-materials' ? ' selected' : '';
+  lhtml += '<div class="pl-stash-summary-li' + allSel + '" data-panel="all-materials"><div style="font-size:1rem;width:32px;text-align:center;">📦</div><div class="pl-stash-li-info"><div class="pl-stash-li-name">All Fabrics</div><div class="pl-stash-li-meta">' + totalBolts + ' bolts · ' + totalYd.toFixed(1) + ' yd</div></div></div>';
+
+  Object.keys(fiberSet).forEach(fk => {
+    const f = window.FIBERS ? window.FIBERS[fk] : null;
+    const sel = plStashPanel === 'fiber-' + fk ? ' selected' : '';
+    lhtml += '<div class="pl-stash-li' + sel + '" data-panel="fiber-' + fk + '"><div class="pl-stash-li-icon fiber" style="background:' + (f ? f.accent : '#888') + ';">' + (f ? f.name[0] : fk[0].toUpperCase()) + '</div><div class="pl-stash-li-info"><div class="pl-stash-li-name">' + (f ? f.name : fk) + '</div><div class="pl-stash-li-meta">' + fiberSet[fk].count + ' bolt' + (fiberSet[fk].count !== 1 ? 's' : '') + '</div></div><span class="pl-stash-li-badge">' + fiberSet[fk].yd.toFixed(1) + ' yd</span></div>';
+  });
+
+  leftEl.innerHTML = lhtml;
+
+  leftEl.querySelectorAll('[data-panel]').forEach(li => {
+    li.addEventListener('click', () => { plStashPanel = li.dataset.panel; renderStashWorkshop(loadUserData()); });
+  });
+  var addFabBtn = leftEl.querySelector('[data-action="add-fabric"]');
+  if (addFabBtn) addFabBtn.addEventListener('click', (e) => { e.stopPropagation(); plStashPanel = 'all-materials'; renderStashWorkshop(loadUserData()); setTimeout(() => plAddStashEntry(), 50); });
+
+  if (plStashPanel === 'all-materials') {
+    renderStashView(data);
+  } else if (plStashPanel.startsWith('fiber-')) {
+    renderStashFiberDetail(data, plStashPanel.replace('fiber-', ''));
+  } else {
+    renderStashEquipment(data, plStashPanel);
+  }
+}
+
+function renderStashFiberDetail(data, fiberKey) {
+  const wrap = document.getElementById('plStashView');
+  if (!wrap) return;
+  const stash = data.stash || [];
+  const bolts = stash.filter(e => e.fiber === fiberKey);
+  const f = window.FIBERS ? window.FIBERS[fiberKey] : null;
+  const totalYd = bolts.reduce((s, e) => s + (e.yardage || 0), 0);
+  let html = '<div class="pl-stash-fiber-hdr"><div class="pl-stash-fiber-av" style="background:' + (f ? f.accent : '#888') + ';">' + (f ? f.name[0] : '?') + '</div><div class="pl-stash-fiber-info"><div class="pl-stash-fiber-name">' + (f ? f.name : fiberKey) + '</div><div class="pl-stash-fiber-sub">' + bolts.length + ' bolt' + (bolts.length !== 1 ? 's' : '') + ' · ' + totalYd.toFixed(1) + ' yd total</div></div><button class="pl-btn-primary" style="font-size:0.76rem;padding:7px 14px;" data-action="add-bolt">+ Add Bolt</button></div>';
+  bolts.forEach(bolt => {
+    const colorHex = bolt.colorHex || '#ccc';
+    const variety = bolt.variety || 'Unknown';
+    const specs = [bolt.colorName, bolt.width ? bolt.width + '″' : '', bolt.weightLabel || ''].filter(Boolean).join(' · ');
+    html += '<div class="pl-stash-fabric-card" style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:12px;padding:14px 18px;"><div style="width:40px;height:40px;border-radius:10px;background:' + colorHex + ';border:1px solid rgba(0,0,0,0.08);flex-shrink:0;"></div><div style="flex:1;"><div style="font-size:0.88rem;font-weight:600;">' + variety + '</div><div style="font-size:0.72rem;color:var(--ink-light);margin-top:2px;">' + specs + '</div></div><div style="font-size:1rem;font-weight:700;">' + (bolt.yardage || 0).toFixed(1) + ' yd</div></div></div>';
+  });
+  if (bolts.length === 0) {
+    html += '<div class="pl-people-empty"><div class="pl-people-empty-icon">🧵</div><div class="pl-people-empty-title">No ' + (f ? f.name : '') + ' in stash</div><div class="pl-people-empty-text">Add a bolt to start tracking.</div></div>';
+  }
+  wrap.innerHTML = html;
+  var addBtn = wrap.querySelector('[data-action="add-bolt"]');
+  if (addBtn) addBtn.addEventListener('click', () => plAddStashEntry());
+}
+
+function renderStashEquipment(data, category) {
+  const wrap = document.getElementById('plStashView');
+  if (!wrap) return;
+  const prof = data.profile || {};
+  const ownedTools = prof.ownedTools || {};
+  const urls = prof.toolUrls || {};
+  const cats = {
+    machines: { icon: '🧵', title: 'Machines', desc: 'Your sewing machines — track what you own and link to manuals.', items: [
+      { k: 'sewing', n: 'Sewing Machine', d: 'Standard home machine — straight stitch, zigzag, buttonholes', cat: 'machines' },
+      { k: 'serger', n: 'Serger / Overlock', d: 'Trims, encloses, and finishes seam edges in one pass', cat: 'machines' },
+      { k: 'coverstitch', n: 'Cover Stitch', d: 'Professional hems and decorative topstitching on knits', cat: 'machines' }
+    ]},
+    cutting: { icon: '✂️', title: 'Cutting Tools', desc: 'Scissors, rotary cutters, and cutting surfaces.', items: [
+      { k: 'rotary', n: 'Rotary Cutter', d: '45mm blade', cat: 'cutting' },
+      { k: 'shears', n: 'Fabric Shears', d: 'Bent-handle dressmaker shears', cat: 'cutting' },
+      { k: 'mat', n: 'Self-Healing Mat', cat: 'cutting' },
+      { k: 'pinking', n: 'Pinking Shears', d: 'Zigzag-edge scissors', cat: 'cutting' }
+    ]},
+    pressing: { icon: '♨️', title: 'Pressing Tools', desc: 'Irons, pressing surfaces, and shaping tools.', items: [
+      { k: 'iron', n: 'Steam Iron', cat: 'pressing' },
+      { k: 'ham', n: 'Pressing Ham', d: 'For darts and curves', cat: 'pressing' },
+      { k: 'sleeveBoard', n: 'Sleeve Board', cat: 'pressing' },
+      { k: 'clapper', n: 'Clapper', d: 'Sets crisp edges', cat: 'pressing' }
+    ]},
+    measuring: { icon: '📏', title: 'Measuring & Marking', desc: 'Rulers, gauges, and fabric marking tools.', items: [
+      { k: 'tape', n: 'Tape Measure', cat: 'measuring' },
+      { k: 'seamGauge', n: 'Seam Gauge', cat: 'measuring' },
+      { k: 'frenchCurve', n: 'French Curve', cat: 'measuring' },
+      { k: 'chalk', n: 'Tailor\'s Chalk', cat: 'marking' },
+      { k: 'ink', n: 'Disappearing Ink Pen', cat: 'marking' },
+      { k: 'tracingWheel', n: 'Tracing Wheel', cat: 'marking' }
+    ]}
+  };
+  const catData = cats[category];
+  if (!catData) { wrap.innerHTML = ''; return; }
+  let html = '<div class="pl-stash-equip-hdr"><div class="pl-stash-equip-title">' + catData.icon + ' ' + catData.title + '</div><div class="pl-stash-equip-desc">' + catData.desc + '</div></div><div class="pl-stash-equip-grid">';
+  catData.items.forEach(item => {
+    const toolCat = item.cat || category;
+    const owned = (ownedTools[toolCat] || []).includes(item.k);
+    const urlKey = toolCat + ':' + item.k;
+    const urlVal = urls[urlKey] || '';
+    html += '<div class="pl-stash-tool-card' + (owned ? '' : ' missing') + '"><div class="pl-stash-tool-check ' + (owned ? 'yes' : 'no') + '">' + (owned ? '✓' : '○') + '</div><div class="pl-stash-tool-info"><div class="pl-stash-tool-name">' + item.n + '</div>';
+    if (item.d) html += '<div class="pl-stash-tool-detail">' + item.d + '</div>';
+    html += '</div>';
+    if (urlVal) html += '<a href="' + urlVal + '" target="_blank" style="font-size:0.68rem;color:var(--accent);text-decoration:none;">Manual ↗</a>';
+    html += '</div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
 }
 
 function renderStashView(data) {
@@ -4445,20 +5000,7 @@ function plDeleteStashEntry(boltId) {
   renderStashView(loadUserData());
 }
 
-function plAddProfile() {
-  const name = prompt('Name for new person:');
-  if (!name) return;
-  const colors = ['#5B8C6B','#C17B7B','#7B6BA0','#4A8B9B','#B8860B','#8B5A8B','#A0522D','#6B9B6B'];
-  const data = loadUserData();
-  const color = colors[data.profiles.length % colors.length];
-  const id = addProfile(data, { name, avatar: { letter: name.charAt(0).toUpperCase(), color } });
-  // Select the new person before rendering
-  const wrap = document.getElementById('plProfileView');
-  if (wrap) wrap.dataset.selectedPerson = id;
-  renderPipelineProfile();
-  // Auto-open edit form for the new profile
-  plShowEditForm(id);
-}
+// plAddProfile is now defined earlier (near renderProfileCards)
 
 // ── Add stash entry (inline form) ──
 function plAddStashEntry() {
@@ -7143,35 +7685,5 @@ function plReset() {
     setTimeout(() => activatePipeline(plCurrentTab), 0);
   }
 })();
-
-// Expose functions used by inline onclick/oninput/onchange handlers to window scope
-window.navigateToTechnique = navigateToTechnique;
-window.ffSetSort = ffSetSort;
-window.ffToggleVariety = ffToggleVariety;
-window.ffToggleFiber = ffToggleFiber;
-window.ffSelectVariety = ffSelectVariety;
-window.togglePropLegend = togglePropLegend;
-window.ffResetFilters = ffResetFilters;
-window.ffUpdateFilter = ffUpdateFilter;
-window.activatePipeline = activatePipeline;
-window.plAddProfile = plAddProfile;
-window.plShowEditForm = plShowEditForm;
-window.plDeleteProfile = plDeleteProfile;
-window.plSaveProfile = plSaveProfile;
-window.plCancelEdit = plCancelEdit;
-window.plDeleteStashEntry = plDeleteStashEntry;
-window.plGoToTab = plGoToTab;
-window.renderFabricRecommendations = renderFabricRecommendations;
-window.showView = showView;
-window.plShowView = showView;
-window.plResetWeights = plResetWeights;
-window.openPeopleEditor = openPeopleEditor;
-window.openStashEditor = openStashEditor;
-window.openGlobalProfile = openGlobalProfile;
-window.renderProfileCards = renderProfileCards;
-window.renderStashView = renderStashView;
-window.renderGpProfile = renderGpProfile;
-window.renderGpTools = renderGpTools;
-window.renderGpPlans = renderGpPlans;
 
 })(); // end tool-planner IIFE

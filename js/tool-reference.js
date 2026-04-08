@@ -2,9 +2,7 @@
 // Data globals (FIBERS, etc.) are assigned by router before this runs.
 (function() {
 // ═══════════════════════════════════════════════════════════════
-// FABRIC REFERENCE TOOL — JavaScript
-// Imports: platform.js (user data), fabric-data.js (FIBERS, NEEDLE_DATA, WEAVE_DATA, etc.)
-// Imports: platform.css, shared.css
+// FABRIC REFERENCE TOOL
 // ═══════════════════════════════════════════════════════════════
 
 // ── COMMERCIAL GLOSSARY (derived at runtime from FIBERS) ──
@@ -22,6 +20,10 @@ Object.entries(FIBERS).forEach(([key, f]) => {
     });
   }
 });
+
+// ── MODULE-LEVEL CONSTANTS ──
+const CARE_ICONS = { washTemp: '🫧', drying: '☀️', ironing: '🔥', storage: '📦', preTreatment: '✂️', shrinkagePercent: '📐' };
+const CARE_LABELS = { washTemp: 'Washing', drying: 'Drying', ironing: 'Ironing', storage: 'Storage', preTreatment: 'Pre-Treatment', shrinkagePercent: 'Shrinkage' };
 
 // ── GLOSSARY LINK HELPERS ──
 function glink(termId, displayText) {
@@ -193,8 +195,6 @@ function renderCareTab(fiberKey, fiber) {
     // Fallback for fibers without extended data
     const c = fiber.care;
     if (!c) return '<p style="color:var(--ink-faint);font-style:italic;">No care information available.</p>';
-    const CARE_ICONS = { washTemp: '🫧', drying: '☀️', ironing: '🔥', storage: '📦', preTreatment: '✂️' };
-    const CARE_LABELS = { washTemp: 'Washing', drying: 'Drying', ironing: 'Ironing', storage: 'Storage', preTreatment: 'Pre-Treatment' };
     return `<div class="care-section"><h4>Care &amp; Preparation</h4><div class="care-grid">${
       ['washTemp','drying','ironing','storage','preTreatment'].map(ck => c[ck] ? `<div class="care-item"><span class="care-icon">${CARE_ICONS[ck]}</span><div><span class="care-label">${CARE_LABELS[ck]}</span>${c[ck]}</div></div>` : '').join('')
     }</div>${c.specialNotes ? `<p style="font-size:0.88rem;color:var(--ink-faint);margin-top:12px;font-style:italic;">💡 ${c.specialNotes}</p>` : ''}</div>`;
@@ -339,6 +339,39 @@ function renderPropBars(key, varietyIdx) {
   }).join('');
 }
 
+function createFiberRadarChart(ctx, label, dataValues, fiber) {
+  return new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: COMPARE_PROPS.map(p => PROP_DISPLAY_LABELS[p] || PROP_LABELS[p]),
+      datasets: [{
+        label: label,
+        data: dataValues,
+        borderColor: fiber.accent,
+        backgroundColor: fiber.accent + '22',
+        borderWidth: 2,
+        pointBackgroundColor: fiber.accent,
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      scales: {
+        r: {
+          beginAtZero: true,
+          max: 100,
+          ticks: { stepSize: 25, display: false },
+          pointLabels: { font: { family: "'Palatino Linotype', Georgia, serif", size: 12 } },
+          grid: { color: 'rgba(0,0,0,0.06)' },
+          angleLines: { color: 'rgba(0,0,0,0.06)' }
+        }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
 function updateOverviewForVariety(key, varietyIdx) {
   // Update bars
   const barsCol = document.getElementById('propsBars_' + key);
@@ -351,46 +384,12 @@ function updateOverviewForVariety(key, varietyIdx) {
   if (fiberRadarChart) { fiberRadarChart.destroy(); fiberRadarChart = null; }
   const canvas = document.getElementById('fiberRadar_' + key);
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
 
   const dataValues = variety
     ? COMPARE_PROPS.map(p => propDisplayValue(p, variety.props[p] || 0))
     : COMPARE_PROPS.map(p => propDisplayValue(p, f.properties[p]?.value || 0));
 
-  const label = variety ? variety.name : f.name;
-
-  fiberRadarChart = new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: COMPARE_PROPS.map(p => PROP_DISPLAY_LABELS[p] || PROP_LABELS[p]),
-      datasets: [{
-        label: label,
-        data: dataValues,
-        borderColor: f.accent,
-        backgroundColor: f.accent + '22',
-        borderWidth: 2,
-        pointBackgroundColor: f.accent,
-        pointRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      scales: {
-        r: {
-          beginAtZero: true,
-          max: 100,
-          ticks: { stepSize: 25, display: false },
-          pointLabels: { font: { family: "'Palatino Linotype', Georgia, serif", size: 12 } },
-          grid: { color: 'rgba(0,0,0,0.06)' },
-          angleLines: { color: 'rgba(0,0,0,0.06)' }
-        }
-      },
-      plugins: {
-        legend: { display: false }
-      }
-    }
-  });
+  fiberRadarChart = createFiberRadarChart(canvas.getContext('2d'), variety ? variety.name : f.name, dataValues, f);
 }
 
 let fiberRadarChart = null;
@@ -399,39 +398,12 @@ function renderFiberRadar(key) {
   if (!canvas) return;
   if (fiberRadarChart) { fiberRadarChart.destroy(); fiberRadarChart = null; }
   const f = FIBERS[key];
-  const ctx = canvas.getContext('2d');
-  fiberRadarChart = new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: COMPARE_PROPS.map(p => PROP_DISPLAY_LABELS[p] || PROP_LABELS[p]),
-      datasets: [{
-        label: f.name,
-        data: COMPARE_PROPS.map(p => propDisplayValue(p, f.properties[p]?.value || 0)),
-        borderColor: f.accent,
-        backgroundColor: f.accent + '22',
-        borderWidth: 2,
-        pointBackgroundColor: f.accent,
-        pointRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      scales: {
-        r: {
-          beginAtZero: true,
-          max: 100,
-          ticks: { stepSize: 25, display: false },
-          pointLabels: { font: { family: "'Palatino Linotype', Georgia, serif", size: 12 } },
-          grid: { color: 'rgba(0,0,0,0.06)' },
-          angleLines: { color: 'rgba(0,0,0,0.06)' }
-        }
-      },
-      plugins: {
-        legend: { display: false }
-      }
-    }
-  });
+  fiberRadarChart = createFiberRadarChart(
+    canvas.getContext('2d'),
+    f.name,
+    COMPARE_PROPS.map(p => propDisplayValue(p, f.properties[p]?.value || 0)),
+    f
+  );
 }
 
 function togglePropLegend(btn) {
@@ -447,8 +419,6 @@ function renderTabPanels() {
   const SEASON_LABELS = { 'warm-weather': '☀️ Warm Weather', 'cool-weather': '❄️ Cool Weather', 'all-season': '🔄 All Season' };
   const TIER_LABELS = { budget: '$ Budget', moderate: '$$ Moderate', luxury: '$$$ Luxury' };
   const TYPE_LABELS = { cellulose: '🌿 Cellulose', protein: '🐑 Protein', bast: '🌾 Bast', regenerated: '♻️ Regenerated' };
-  const CARE_ICONS = { washTemp: '🫧', drying: '☀️', ironing: '🔥', storage: '📦', preTreatment: '✂️', shrinkagePercent: '📐' };
-  const CARE_LABELS = { washTemp: 'Washing', drying: 'Drying', ironing: 'Ironing', storage: 'Storage', preTreatment: 'Pre-Treatment', shrinkagePercent: 'Shrinkage' };
 
   const wrap = document.getElementById('tabContent');
   wrap.innerHTML = Object.entries(FIBERS).map(([key, f], i) => {
@@ -1509,18 +1479,24 @@ function renderTechniquesView() {
     </p>
   `;
 
+  bindSubTabs(container, 'cat');
+}
+
+// Toggle technique card expand/collapse
+// Bind click listeners for sub-tab switching. attr is the data attribute name
+// used on both .sub-tab (data-<attr>) and .sub-tab-content (data-<attr>).
+function bindSubTabs(container, attr) {
   container.querySelectorAll('.sub-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      const cat = tab.dataset.cat;
+      const val = tab.dataset[attr];
       container.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
       container.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
       tab.classList.add('active');
-      container.querySelector(`.sub-tab-content[data-cat="${cat}"]`).classList.add('active');
+      container.querySelector(`.sub-tab-content[data-${attr}="${val}"]`).classList.add('active');
     });
   });
 }
 
-// Toggle technique card expand/collapse
 function toggleTechCard(card) {
   card.classList.toggle('tech-card-collapsed');
 }
@@ -1644,15 +1620,7 @@ function renderConstructionView() {
     `).join('')}
   `;
 
-  container.querySelectorAll('.sub-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const cat = tab.dataset.cat;
-      container.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-      container.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      container.querySelector(`.sub-tab-content[data-cat="${cat}"]`).classList.add('active');
-    });
-  });
+  bindSubTabs(container, 'cat');
 }
 
 
@@ -1771,15 +1739,7 @@ function renderWeavesView() {
     </div>
   `;
 
-  container.querySelectorAll('.sub-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const section = tab.dataset.section;
-      container.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-      container.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      container.querySelector(`.sub-tab-content[data-section="${section}"]`).classList.add('active');
-    });
-  });
+  bindSubTabs(container, 'section');
 }
 
 

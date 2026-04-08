@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // PLATFORM JS — Shared user data model & utilities
-// Loaded by every HTML page. Craft-specific data stays in
-// fabric-data.js (sewing) or data-dyeing.js, etc.
+// Loaded as <script> in index.html. Craft-specific data lives
+// in data/*.js files loaded by DataLoader.
 // ═══════════════════════════════════════════════════════════════
 
 // ── USER DATA DEFAULTS ──
@@ -18,7 +18,9 @@ const USER_DATA_DEFAULTS = {
     toolUrls: {},
     onboarded: false,
     savedPlans: [],
-    favoriteProjects: []
+    favoriteProjects: [],
+    hidden: [],
+    linkedPersonId: 'default'
   },
   // People roster — everyone you sew for (including yourself)
   profiles: [
@@ -28,7 +30,10 @@ const USER_DATA_DEFAULTS = {
       avatar: { letter: 'Y', color: '#5B8C6B' },
       measurements: {},
       preferredSize: '',
-      skill: 'intermediate',
+      topSize: '',
+      bottomSize: '',
+      shoeSize: '',
+      cupSize: '',
       fit: 'standard',
       favoriteFibers: [],
       gender: '',
@@ -38,11 +43,12 @@ const USER_DATA_DEFAULTS = {
       favorites: [],
       wantToMake: [],
       savedPlans: [],
-      hidden: [],
-      projectHistory: [],
-      ownedTools: { machines: [], cutting: [], measuring: [], pressing: [], marking: [] }
+      projectHistory: []
     }
   ],
+  // Groups — collections of people for batch projects
+  groups: [],
+  nextGroupId: 1,
   stash: [],
   nextBoltId: 1,
   pipelineState: null,
@@ -135,7 +141,6 @@ function removeStashEntry(userData, id) {
 
 function getStashGroups(stash) {
   const groups = {};
-  const singles = [];
   stash.forEach(entry => {
     const groupKey = entry.fiber + '|' + (entry.variety || '');
     if (!groups[groupKey]) groups[groupKey] = [];
@@ -158,6 +163,67 @@ function getStashFibers(stash) {
     if (entry.colorHex) fibers[entry.fiber].colors.add(entry.colorHex);
   });
   return fibers;
+}
+
+// ── GROUP HELPERS ──
+
+const GROUP_DEFAULTS = {
+  id: '', name: '', icon: '📋', notes: '',
+  status: 'active', // active | completed | archived
+  deadline: '',
+  memberIds: [],
+  projects: [],
+  template: 'blank', // personal | event | client | blank
+  contactInfo: '',
+  created: ''
+};
+
+function addGroup(userData, group) {
+  const id = 'group_' + (userData.nextGroupId || 1);
+  userData.nextGroupId = (userData.nextGroupId || 1) + 1;
+  const newGroup = { ...GROUP_DEFAULTS, ...group, id, created: new Date().toISOString() };
+  if (!userData.groups) userData.groups = [];
+  userData.groups.push(newGroup);
+  saveUserData(userData);
+  return id;
+}
+
+function updateGroup(userData, id, updates) {
+  if (!userData.groups) return;
+  const idx = userData.groups.findIndex(g => g.id === id);
+  if (idx >= 0) {
+    userData.groups[idx] = { ...userData.groups[idx], ...updates };
+    saveUserData(userData);
+  }
+}
+
+function removeGroup(userData, id) {
+  if (!userData.groups) return;
+  userData.groups = userData.groups.filter(g => g.id !== id);
+  saveUserData(userData);
+}
+
+function getGroupsForPerson(userData, personId) {
+  if (!userData.groups) return [];
+  return userData.groups.filter(g => g.memberIds && g.memberIds.includes(personId));
+}
+
+function addPersonToGroup(userData, groupId, personId) {
+  if (!userData.groups) return;
+  const group = userData.groups.find(g => g.id === groupId);
+  if (group && !group.memberIds.includes(personId)) {
+    group.memberIds.push(personId);
+    saveUserData(userData);
+  }
+}
+
+function removePersonFromGroup(userData, groupId, personId) {
+  if (!userData.groups) return;
+  const group = userData.groups.find(g => g.id === groupId);
+  if (group) {
+    group.memberIds = group.memberIds.filter(id => id !== personId);
+    saveUserData(userData);
+  }
 }
 
 // ── PIPELINE STATE ──

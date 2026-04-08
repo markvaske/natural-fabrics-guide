@@ -68,8 +68,8 @@ function initShell(activeToolId) {
   // ── Tool Switcher ──
   var html = '<div class="sidebar-tool-switcher">';
   SHELL_TOOLS.forEach(function(tool) {
-    var shellId = tool.id === 'planner' ? 'planner' : tool.id;
-    var isActive = shellId === activeToolId || (tool.id === 'planner' && activeToolId === 'planner');
+    var toolShellId = tool.id === 'planner' ? 'planner' : tool.id;
+    var isActive = toolShellId === activeToolId;
     html += '<a href="' + tool.hash + '" class="sidebar-tool-btn' + (isActive ? ' active' : '') + '" data-tool="' + tool.id + '">';
     html += SHELL_ICONS[tool.id] || '';
     html += '<span class="sidebar-tool-label">' + tool.label + '</span>';
@@ -155,31 +155,41 @@ function shellOpenEditor(target) {
     : Router.ensureLoaded('projects');
 
   loadPromise.then(function() {
-    // Hide all tool containers + app-editors
+    // Hide all tool containers
     document.querySelectorAll('.main-content').forEach(function(el) {
       el.style.display = 'none';
     });
 
     // Show app-editors
-    document.getElementById('app-editors').style.display = '';
+    var editors = document.getElementById('app-editors');
+    if (editors) editors.style.display = '';
 
     // Show the target editor view
     ['gpView', 'peopleSaView', 'stashSaView'].forEach(function(id) {
-      document.getElementById(id).classList.remove('active');
+      var el = document.getElementById(id);
+      if (el) el.classList.remove('active');
     });
+
+    var data = loadUserData();
 
     if (target === 'people') {
       document.getElementById('peopleSaView').classList.add('active');
-      if (typeof window.renderProfileCards === 'function') window.renderProfileCards(loadUserData());
+      if (typeof window.renderProfileCards === 'function') {
+        window.renderProfileCards(data);
+      }
     } else if (target === 'stash') {
       document.getElementById('stashSaView').classList.add('active');
-      if (typeof window.renderStashView === 'function') window.renderStashView(loadUserData());
+      if (typeof window.renderStashWorkshop === 'function') {
+        window.renderStashWorkshop(data);
+      } else if (typeof window.renderStashView === 'function') {
+        window.renderStashView(data);
+      }
     } else if (target === 'profile') {
       document.getElementById('gpView').classList.add('active');
       if (typeof window.renderGpProfile === 'function') {
         window.renderGpProfile();
-        window.renderGpTools();
-        window.renderGpPlans();
+        if (typeof window.renderGpTools === 'function') window.renderGpTools();
+        if (typeof window.renderGpPlans === 'function') window.renderGpPlans();
       }
     }
 

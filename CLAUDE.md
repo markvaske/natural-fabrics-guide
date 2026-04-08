@@ -39,11 +39,11 @@ Follow V3.3 Spec (Notes DB: `32fb53061c768151abc2e381d11cccbb`) for all standard
 - `REFERENCE.md` is a redirect pointer — all docs live in `Project.md`
 
 ## Counters & State
-- Prompt counter: 46
+- Prompt counter: 48
 - Next maintenance: prompt 50
 - Concept learning queue: 0
-- Current version: v5.1.0 (Persistence Abstraction — swappable DataStore, schema versioning)
-- Current initiative: v4.0 Architecture Overhaul — JSON data extraction + unified shell + SPA router (Migration guide: `MIGRATION-v4.md`)
+- Current version: v5.2.0 (People view redesign — sidebar/detail, groups, modals)
+- Current initiative: UI Redesign — People v1 implemented, Stash/Workshop + Profile pending (Spec: `33cb53061c7681b6a5e0f6a00d4345e2`)
 - Next major initiative: Research — Validate Skill Difficulty Tiers (Task: `332b53061c768186ba66e964d3047e2a`)
 
 ## Project Notion IDs

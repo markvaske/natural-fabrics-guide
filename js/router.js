@@ -26,70 +26,10 @@ var Router = {
     }
   },
 
-  async navigate(hash) {
-    var toolId = (hash || '').replace('#', '').replace('/', '') || 'reference';
-    if (!this.tools[toolId]) toolId = 'reference';
-
-    // Close any open editor
-    if (typeof shellCloseEditor === 'function') shellCloseEditor();
-
-    // If same tool and already loaded, just make sure it's visible
-    if (toolId === this._currentTool && this._initialized[toolId]) {
-      var el = document.getElementById(this.tools[toolId].container);
-      if (el) el.style.display = '';
-      return;
-    }
-
-    // Hide current tool container
-    if (this._currentTool) {
-      var oldEl = document.getElementById('tool-' + this._currentTool);
-      if (oldEl) oldEl.style.display = 'none';
-    }
-
-    // Also hide app-editors
-    var appEd = document.getElementById('app-editors');
-    if (appEd) appEd.style.display = 'none';
-
-    this._currentTool = toolId;
+  // Shared init sequence for both navigate and ensureLoaded
+  async _initTool(toolId) {
     var config = this.tools[toolId];
-
-    // Show target tool container
-    var el = document.getElementById(config.container);
-    if (el) el.style.display = '';
-
-    // Load data + script on first visit
-    if (!this._initialized[toolId]) {
-      await DataLoader.preload.apply(DataLoader, config.data);
-      this._assignGlobals();
-
-      if (!window._sewingUtilsReady) {
-        initSewingUtils();
-        window._sewingUtilsReady = true;
-      }
-
-      // Render sidebar BEFORE loading tool script
-      // (tool script's initModes needs sidebar buttons to exist)
-      initShell(config.shellId);
-
-      await this._loadScript(config.script);
-      this._initialized[toolId] = true;
-    } else {
-      // Already loaded — re-render sidebar and re-attach mode listeners
-      initShell(config.shellId);
-    }
-
-    // Update hash
-    if (location.hash !== '#' + toolId) {
-      history.replaceState(null, '', '#' + toolId);
-    }
-  },
-
-  // Load a tool's data + script without showing it
-  async ensureLoaded(toolId) {
-    if (this._initialized[toolId]) return;
-    var config = this.tools[toolId];
-    if (!config) return;
-    await DataLoader.preload.apply(DataLoader, config.data);
+    await DataLoader.preload(...config.data);
     this._assignGlobals();
     if (!window._sewingUtilsReady) {
       initSewingUtils();
@@ -99,52 +39,60 @@ var Router = {
     this._initialized[toolId] = true;
   },
 
+  async navigate(hash) {
+    var toolId = (hash || '').replace('#', '').replace('/', '') || 'reference';
+    if (!this.tools[toolId]) toolId = 'reference';
+
+    if (typeof shellCloseEditor === 'function') shellCloseEditor();
+
+    if (toolId === this._currentTool && this._initialized[toolId]) {
+      var el = document.getElementById(this.tools[toolId].container);
+      if (el) el.style.display = '';
+      return;
+    }
+
+    if (this._currentTool) {
+      var oldEl = document.getElementById('tool-' + this._currentTool);
+      if (oldEl) oldEl.style.display = 'none';
+    }
+
+    var appEd = document.getElementById('app-editors');
+    if (appEd) appEd.style.display = 'none';
+
+    this._currentTool = toolId;
+    var config = this.tools[toolId];
+
+    var el = document.getElementById(config.container);
+    if (el) el.style.display = '';
+
+    if (!this._initialized[toolId]) {
+      initShell(config.shellId);
+      await this._initTool(toolId);
+    } else {
+      initShell(config.shellId);
+    }
+
+    if (location.hash !== '#' + toolId) {
+      history.replaceState(null, '', '#' + toolId);
+    }
+  },
+
+  async ensureLoaded(toolId) {
+    if (this._initialized[toolId]) return;
+    var config = this.tools[toolId];
+    if (!config) return;
+    await this._initTool(toolId);
+  },
+
   _assignGlobals: function() {
-    if (window.NFG_DATA.fibers) {
-      var fd = window.NFG_DATA.fibers;
-      window.FIBERS = fd.FIBERS;
-      window.PROP_INVERTED = fd.PROP_INVERTED;
-      window.PROP_TOOLTIPS = fd.PROP_TOOLTIPS;
-      window.FIBER_PROS_CONS = fd.FIBER_PROS_CONS;
-      window.FILTER_TAGS = fd.FILTER_TAGS;
-      window.FIBER_ENV_ALLERGEN = fd.FIBER_ENV_ALLERGEN;
-      window.WEIGHT_TECHNIQUES = fd.WEIGHT_TECHNIQUES;
-      window.BLEND_NOTES = fd.BLEND_NOTES;
-      window.CARE_EXTENDED = fd.CARE_EXTENDED;
-      window.CARE_SECTIONS = fd.CARE_SECTIONS;
-    }
-    if (window.NFG_DATA.projects) {
-      var pd = window.NFG_DATA.projects;
-      window.PROJECT_AUDIENCES = pd.PROJECT_AUDIENCES;
-      window.PROJECT_CATALOG = pd.PROJECT_CATALOG;
-      window.CONSTRUCTION_DETAILS = pd.CONSTRUCTION_DETAILS;
-      window.YARDAGE_DATA = pd.YARDAGE_DATA;
-      window.YARDAGE_SIZE_MULTIPLIERS = pd.YARDAGE_SIZE_MULTIPLIERS;
-      window.YARDAGE_HEIGHT_ADJUST = pd.YARDAGE_HEIGHT_ADJUST;
-      window.YARDAGE_WIDTH_MULTIPLIERS = pd.YARDAGE_WIDTH_MULTIPLIERS;
-      window.YARDAGE_ADDONS = pd.YARDAGE_ADDONS;
-      window.MEASUREMENT_PRESETS = pd.MEASUREMENT_PRESETS;
-      window.MEASUREMENT_GROUPS = pd.MEASUREMENT_GROUPS;
-      window.BASE_YARDAGE = pd.BASE_YARDAGE;
-    }
-    if (window.NFG_DATA.tools) {
-      var td = window.NFG_DATA.tools;
-      window.NEEDLE_DATA = td.NEEDLE_DATA;
-      window.TECHNIQUE_DATA = td.TECHNIQUE_DATA;
-      window.SEAM_FINISHES = td.SEAM_FINISHES;
-      window.INTERFACING_TYPES = td.INTERFACING_TYPES;
-      window.FIBER_INTERFACING_RECS = td.FIBER_INTERFACING_RECS;
-      window.GLOSSARY_DATA = td.GLOSSARY_DATA;
-      window.WEAVE_DATA = td.WEAVE_DATA;
-      window.TROUBLESHOOT_DATA = td.TROUBLESHOOT_DATA;
-    }
-    if (window.NFG_DATA.machines) {
-      var md = window.NFG_DATA.machines;
-      window.MACHINE_TYPES = md.MACHINE_TYPES;
-      window.TOOL_INVENTORY_LABELS = md.TOOL_INVENTORY_LABELS;
-      window.MACHINE_TROUBLESHOOT = md.MACHINE_TROUBLESHOOT;
-      window.MACHINE_MAINTENANCE = md.MACHINE_MAINTENANCE;
-    }
+    // Assign from all loaded data modules — safe to call multiple times
+    // as new data files load (different tools need different data)
+    Object.entries(_GLOBAL_MAP).forEach(function(entry) {
+      var module = entry[0], keys = entry[1];
+      if (window.NFG_DATA[module]) {
+        keys.forEach(function(k) { window[k] = window.NFG_DATA[module][k]; });
+      }
+    });
   },
 
   _loadScript: function(src) {
@@ -156,6 +104,18 @@ var Router = {
       document.head.appendChild(script);
     });
   }
+};
+
+// Data module → global variable names (all keys mirror exactly)
+var _GLOBAL_MAP = {
+  fibers:   ['FIBERS','PROP_INVERTED','PROP_TOOLTIPS','FIBER_PROS_CONS','FILTER_TAGS',
+             'FIBER_ENV_ALLERGEN','WEIGHT_TECHNIQUES','BLEND_NOTES','CARE_EXTENDED','CARE_SECTIONS'],
+  projects: ['PROJECT_AUDIENCES','PROJECT_CATALOG','CONSTRUCTION_DETAILS','YARDAGE_DATA',
+             'YARDAGE_SIZE_MULTIPLIERS','YARDAGE_HEIGHT_ADJUST','YARDAGE_WIDTH_MULTIPLIERS',
+             'YARDAGE_ADDONS','MEASUREMENT_PRESETS','MEASUREMENT_GROUPS','BASE_YARDAGE'],
+  tools:    ['NEEDLE_DATA','TECHNIQUE_DATA','SEAM_FINISHES','INTERFACING_TYPES',
+             'FIBER_INTERFACING_RECS','GLOSSARY_DATA','WEAVE_DATA','TROUBLESHOOT_DATA'],
+  machines: ['MACHINE_TYPES','TOOL_INVENTORY_LABELS','MACHINE_TROUBLESHOOT','MACHINE_MAINTENANCE']
 };
 
 // Boot

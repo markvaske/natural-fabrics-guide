@@ -5,8 +5,12 @@
 // Derived property constants — computed from FIBERS after data loads
 var COMPARE_PROPS, PROP_LABELS, PROP_DISPLAY_LABELS;
 
+// Cached reference — set by initSewingUtils, avoids repeated property chain lookups
+var _propInverted = null;
+
 function initSewingUtils() {
   var FIBERS = window.NFG_DATA.fibers.FIBERS;
+  _propInverted = window.NFG_DATA.fibers.PROP_INVERTED;
   COMPARE_PROPS = Object.keys(FIBERS.cotton.properties);
   PROP_LABELS = Object.fromEntries(
     COMPARE_PROPS.map(function(k) {
@@ -27,10 +31,12 @@ function initSewingUtils() {
   }
 }
 
+// Round to nearest quarter-yard
+function roundToQuarter(n) { return Math.ceil(n * 4) / 4; }
+
 // Convert stored value to display value (inverts bad-high properties)
 function propDisplayValue(key, storedValue) {
-  var PROP_INVERTED = window.NFG_DATA.fibers.PROP_INVERTED;
-  return PROP_INVERTED[key] ? 100 - storedValue : storedValue;
+  return _propInverted[key] ? 100 - storedValue : storedValue;
 }
 
 // Yardage estimation — requires BASE_YARDAGE from projects data
@@ -44,13 +50,13 @@ function estimateYardage(projectId, widthInches, size, directional, preShrunk, s
   var base = widthData[size] || widthData['M'];
 
   // Directional layout adds ~15%
-  if (directional) base = Math.ceil(base * 1.15 * 4) / 4;
+  if (directional) base = roundToQuarter(base * 1.15);
 
   // Shrinkage buffer if not pre-shrunk
   var shrinkBuffer = 0;
   if (!preShrunk && shrinkagePercent) {
     var pct = parseFloat(shrinkagePercent) || 4;
-    shrinkBuffer = Math.ceil(base * (pct / 100) * 4) / 4;
+    shrinkBuffer = roundToQuarter(base * (pct / 100));
   }
 
   return { base: base, directionalAdd: directional ? base - (widthData[size] || widthData['M']) : 0, shrinkBuffer: shrinkBuffer, total: base + shrinkBuffer };

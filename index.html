@@ -28,7 +28,6 @@
 <div class="tool-view gp-view active" id="gpView">
   <div class="seg-control gp-seg-control" id="gpSegControl">
     <button class="seg-btn active" data-gp-seg="profile">Profile</button>
-    <button class="seg-btn" data-gp-seg="tools">Tools</button>
     <button class="seg-btn" data-gp-seg="plans">Plans</button>
   </div>
   <div id="gpSegProfile" class="gp-seg-panel"></div>
@@ -37,15 +36,21 @@
 </div>
 <!-- Standalone People Editor -->
 <div class="tool-view gp-view" id="peopleSaView">
-  <div class="pl-section-title" style="margin-bottom:4px;">People</div>
-  <p class="pl-annotation">Manage the people you sew for — measurements, preferences, favorites, and sensitivities.</p>
-  <div id="plProfileView"></div>
+  <div class="pl-people-layout">
+    <div class="pl-people-list" id="plPeopleList"></div>
+    <div class="pl-people-detail" id="plPeopleDetail">
+      <div id="plProfileView"></div>
+    </div>
+  </div>
 </div>
 <!-- Standalone Stash Editor -->
 <div class="tool-view gp-view" id="stashSaView">
-  <div class="pl-section-title" style="margin-bottom:4px;">Fabric Stash</div>
-  <p class="pl-annotation">Track your fabric inventory — add bolts, log yardage, and organize by fiber and weight.</p>
-  <div id="plStashView"></div>
+  <div class="pl-stash-layout">
+    <div class="pl-stash-left" id="plStashLeft"></div>
+    <div class="pl-stash-right" id="plStashRight">
+      <div id="plStashView"></div>
+    </div>
+  </div>
 </div>
 <!-- Hidden utility containers -->
 <div style="display:none;">
@@ -317,6 +322,11 @@
   <div id="needlesContent"></div>
 </div>
 
+</div>
+
+<!-- ═══ MODAL OVERLAY (used by People for group creation, member picker, etc.) ═══ -->
+<div id="plModal" class="pl-modal-overlay" style="display:none;">
+  <div class="pl-modal-content" id="plModalContent"></div>
 </div>
 
 <script src="js/router.js"></script>
