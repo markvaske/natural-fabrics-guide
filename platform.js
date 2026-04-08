@@ -1,0 +1,173 @@
+// ═══════════════════════════════════════════════════════════════
+// PLATFORM JS — Shared user data model & utilities
+// Loaded by every HTML page. Craft-specific data stays in
+// fabric-data.js (sewing) or data-dyeing.js, etc.
+// ═══════════════════════════════════════════════════════════════
+
+// ── USER DATA DEFAULTS ──
+
+const USER_DATA_DEFAULTS = {
+  // App-level user profile (singleton — the sewist using this app)
+  profile: {
+    name: 'You',
+    skill: 'intermediate',
+    sewistTypes: [],
+    preferredFit: 'standard',
+    tailorMode: false,
+    ownedTools: { machines: [], cutting: [], measuring: [], pressing: [], marking: [] },
+    toolUrls: {},
+    onboarded: false,
+    savedPlans: [],
+    favoriteProjects: []
+  },
+  // People roster — everyone you sew for (including yourself)
+  profiles: [
+    {
+      id: 'default',
+      name: 'You',
+      avatar: { letter: 'Y', color: '#5B8C6B' },
+      measurements: {},
+      preferredSize: '',
+      skill: 'intermediate',
+      fit: 'standard',
+      favoriteFibers: [],
+      gender: '',
+      ageGroup: '',
+      favoriteColors: [],
+      sensitivities: [],
+      favorites: [],
+      wantToMake: [],
+      savedPlans: [],
+      hidden: [],
+      projectHistory: [],
+      ownedTools: { machines: [], cutting: [], measuring: [], pressing: [], marking: [] }
+    }
+  ],
+  stash: [],
+  nextBoltId: 1,
+  pipelineState: null,
+  lastExport: null
+};
+
+// ── WEIGHT CATEGORIES & CONVERSIONS ──
+
+const WEIGHT_CATEGORIES = [
+  { key: 'sheer',        label: 'Sheer',        min: 0,   max: 2,   gsmRange: '0–60' },
+  { key: 'light',        label: 'Light',        min: 2,   max: 3,   gsmRange: '60–100' },
+  { key: 'light-medium', label: 'Light-Med',    min: 3,   max: 4,   gsmRange: '100–135' },
+  { key: 'medium',       label: 'Medium',       min: 4,   max: 5.5, gsmRange: '135–185' },
+  { key: 'medium-heavy', label: 'Med-Heavy',    min: 5.5, max: 7,   gsmRange: '185–235' },
+  { key: 'heavy',        label: 'Heavy',        min: 7,   max: 99,  gsmRange: '235+' }
+];
+
+// Weight unit conversions: 1 oz/yd² ≈ 33.906 GSM
+function ozToGsm(oz) { return Math.round(oz * 33.906); }
+function gsmToOz(gsm) { return +(gsm / 33.906).toFixed(1); }
+
+function getWeightCategory(ozYd2) {
+  if (!ozYd2 || ozYd2 <= 0) return null;
+  return WEIGHT_CATEGORIES.find(c => ozYd2 >= c.min && ozYd2 < c.max) || WEIGHT_CATEGORIES[WEIGHT_CATEGORIES.length - 1];
+}
+
+// ── PERSISTENCE ──
+// Thin wrappers delegating to the global `store` instance (js/storage.js).
+// All 58+ call sites in tool scripts use these function names unchanged.
+
+function loadUserData() {
+  return store.load();
+}
+
+function saveUserData(data) {
+  store.save(data);
+}
+
+function exportUserData(data) {
+  store.export(data);
+}
+
+function importUserData(file, callback) {
+  store.import(file, callback);
+}
+
+// ── PROFILE HELPERS ──
+
+function getProfile(userData, id) {
+  return userData.profiles.find(p => p.id === id) || userData.profiles[0];
+}
+
+function addProfile(userData, profile) {
+  const id = 'person_' + Date.now();
+  const newProfile = { ...USER_DATA_DEFAULTS.profiles[0], ...profile, id };
+  userData.profiles.push(newProfile);
+  saveUserData(userData);
+  return id;
+}
+
+function updateProfile(userData, id, updates) {
+  const idx = userData.profiles.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    userData.profiles[idx] = { ...userData.profiles[idx], ...updates };
+    saveUserData(userData);
+  }
+}
+
+// ── STASH HELPERS ──
+
+function addStashEntry(userData, entry) {
+  const id = 'bolt_' + (userData.nextBoltId++);
+  userData.stash.push({ ...entry, id, dateAdded: new Date().toISOString() });
+  saveUserData(userData);
+  return id;
+}
+
+function updateStashEntry(userData, id, updates) {
+  const idx = userData.stash.findIndex(e => e.id === id);
+  if (idx >= 0) {
+    userData.stash[idx] = { ...userData.stash[idx], ...updates };
+    saveUserData(userData);
+  }
+}
+
+function removeStashEntry(userData, id) {
+  userData.stash = userData.stash.filter(e => e.id !== id);
+  saveUserData(userData);
+}
+
+function getStashGroups(stash) {
+  const groups = {};
+  const singles = [];
+  stash.forEach(entry => {
+    const groupKey = entry.fiber + '|' + (entry.variety || '');
+    if (!groups[groupKey]) groups[groupKey] = [];
+    groups[groupKey].push(entry);
+  });
+  const result = [];
+  Object.entries(groups).forEach(([key, entries]) => {
+    const [fiber, variety] = key.split('|');
+    result.push({ type: entries.length > 1 ? 'group' : 'single', fiber, variety, entries, totalYardage: entries.reduce((s, e) => s + (e.yardage || 0), 0) });
+  });
+  return result;
+}
+
+function getStashFibers(stash) {
+  const fibers = {};
+  stash.forEach(entry => {
+    if (!fibers[entry.fiber]) fibers[entry.fiber] = { colors: new Set(), count: 0, yardage: 0 };
+    fibers[entry.fiber].count++;
+    fibers[entry.fiber].yardage += entry.yardage || 0;
+    if (entry.colorHex) fibers[entry.fiber].colors.add(entry.colorHex);
+  });
+  return fibers;
+}
+
+// ── PIPELINE STATE ──
+
+function savePipelineState(userData, state) {
+  userData.pipelineState = state;
+  saveUserData(userData);
+}
+
+function clearPipelineState(userData) {
+  userData.pipelineState = null;
+  saveUserData(userData);
+}

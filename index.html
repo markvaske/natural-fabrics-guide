@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Natural Fabrics Guide</title>
+<link rel="stylesheet" href="platform.css">
+<link rel="stylesheet" href="shared.css">
+<script src="js/data-loader.js"></script>
+<script src="platform.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/shell.js"></script>
+<script src="js/sewing-utils.js"></script>
+<script src="js/scoring.js"></script>
+<script src="https://artifactcdn.diabrowser.engineering/ajax/libs/Chart.js/chart.umd.js"></script>
+</head>
+<body>
+
+<nav class="sidebar"></nav>
+
+<!-- ═══ APP-LEVEL EDITORS (accessible from any tool via sidebar bottom) ═══ -->
+<div id="app-editors" class="main-content" style="display:none;">
+<div class="site-header">
+  <h1>Natural Fabrics Guide</h1>
+  <span class="tagline">A sewist's companion to fibers, fabrics &amp; tools</span>
+</div>
+<!-- Global Profile View -->
+<div class="tool-view gp-view active" id="gpView">
+  <div class="seg-control gp-seg-control" id="gpSegControl">
+    <button class="seg-btn active" data-gp-seg="profile">Profile</button>
+    <button class="seg-btn" data-gp-seg="tools">Tools</button>
+    <button class="seg-btn" data-gp-seg="plans">Plans</button>
+  </div>
+  <div id="gpSegProfile" class="gp-seg-panel"></div>
+  <div id="gpSegTools" class="gp-seg-panel" style="display:none;"></div>
+  <div id="gpSegPlans" class="gp-seg-panel" style="display:none;"></div>
+</div>
+<!-- Standalone People Editor -->
+<div class="tool-view gp-view" id="peopleSaView">
+  <div class="pl-section-title" style="margin-bottom:4px;">People</div>
+  <p class="pl-annotation">Manage the people you sew for — measurements, preferences, favorites, and sensitivities.</p>
+  <div id="plProfileView"></div>
+</div>
+<!-- Standalone Stash Editor -->
+<div class="tool-view gp-view" id="stashSaView">
+  <div class="pl-section-title" style="margin-bottom:4px;">Fabric Stash</div>
+  <p class="pl-annotation">Track your fabric inventory — add bolts, log yardage, and organize by fiber and weight.</p>
+  <div id="plStashView"></div>
+</div>
+<!-- Hidden utility containers -->
+<div style="display:none;">
+  <div id="plProfileTabs"></div>
+  <button id="plExportBtn"></button>
+  <button id="plImportBtn"></button>
+  <input type="file" id="plImportFile" accept=".json" style="display:none;">
+</div>
+</div>
+
+<div id="tool-reference" class="main-content" style="display:none;">
+<div class="site-header">
+  <h1>Natural Fabrics Guide</h1>
+  <span class="tagline">A sewist's companion to fibers, fabrics &amp; tools</span>
+</div>
+<!-- Fibers Mode with Browse / Compare / Blend segmented control -->
+<div class="tool-view fibers-view active" id="fibersView">
+  <div class="seg-control fiber-seg-control" id="fiberSegControl">
+    <button class="seg-btn fiber-seg-btn active" data-seg="browse">Browse</button>
+    <button class="seg-btn fiber-seg-btn" data-seg="compare">Compare</button>
+    <button class="seg-btn fiber-seg-btn" data-seg="blend">Blend</button>
+  </div>
+  <div class="fiber-seg-hint" id="fiberSegHint"></div>
+  <!-- Compact chip selector -->
+  <div class="fiber-chip-selector" id="fiberChipSelector"></div>
+  <!-- Unified content area below selector -->
+  <div class="fiber-content-area" id="fiberContentArea">
+    <!-- Default welcome message (shown when no fiber is selected) -->
+    <div class="fiber-welcome" id="fiberWelcome">
+      <div class="fiber-welcome-inner">
+        <div class="fiber-welcome-icon">🧵</div>
+        <h2 class="fiber-welcome-title">Explore Natural Fibers</h2>
+        <p class="fiber-welcome-text">Select a fiber above to explore its properties, varieties, care instructions, and sewing settings. Use <strong>Compare</strong> to see fibers side-by-side or <strong>Blend</strong> to explore how two fibers work together.</p>
+        <div class="fiber-welcome-hints">
+          <span class="fiber-welcome-hint">🌿 20 fibers across 4 categories</span>
+          <span class="fiber-welcome-hint">📊 10 scored properties per fiber</span>
+          <span class="fiber-welcome-hint">🪡 Needle &amp; thread settings by weight</span>
+        </div>
+      </div>
+    </div>
+    <div class="fiber-detail-wrapper" id="fiberDetailWrapper" style="display:none">
+      <div id="tabContent"></div>
+    </div>
+    <!-- Compare results -->
+    <div class="compare-results-inline" id="compareResultsInline" style="display:none">
+      <div class="compare-results" id="compareResults">
+        <div class="compare-empty">Select at least two fibers above to see a comparison.</div>
+      </div>
+    </div>
+    <!-- Blend results -->
+    <div class="blend-results-inline" id="blendResultsInline" style="display:none">
+      <div class="blend-ratio-wrap" id="blendRatioWrap" style="display:none">
+        <label class="blend-ratio-label">
+          <span id="blendFiberAName">Fiber A</span>
+          <input type="range" id="blendRatioSlider" min="10" max="90" value="50" step="5" class="blend-slider">
+          <span id="blendFiberBName">Fiber B</span>
+        </label>
+        <div class="blend-ratio-readout" id="blendRatioReadout">50 / 50</div>
+      </div>
+      <div id="blendResults">
+        <div class="rec-empty">Select two fibers above to see how they behave as a blend.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Print Preview -->
+<div class="print-preview-inline" id="printPreview" style="display:none"></div>
+
+<!-- Weaves & Knits Mode -->
+<div class="tool-view weaves-view" id="weavesView"></div>
+
+<!-- Techniques Mode -->
+<div class="tool-view techniques-view" id="techniquesView"></div>
+
+<!-- Construction Mode -->
+<div class="tool-view construction-view" id="constructionView"></div>
+
+<!-- Glossary Mode -->
+<div class="tool-view glossary-view" id="glossaryView"></div>
+
+</div>
+
+<div id="tool-projects" class="main-content" style="display:none;">
+<div class="site-header">
+  <h1>Natural Fabrics Guide</h1>
+  <span class="tagline">A sewist's companion to fibers, fabrics &amp; tools</span>
+</div>
+
+<!-- Projects Home -->
+<div class="tool-view recommend-view active" id="projectsView">
+  <div id="projectHomeContent"></div>
+</div>
+
+<!-- Needle & Thread Mode -->
+<div class="tool-view needle-view" id="needleView">
+  <div class="needle-panel">
+    <h3>Select a Fiber</h3>
+    <div class="fiber-checkboxes" id="needleFiberPicker"></div>
+  </div>
+  <div id="needleResults">
+    <div class="rec-empty">Choose a fiber above to see needle, thread, and machine settings.</div>
+  </div>
+</div>
+
+<!-- Seam Finder Mode -->
+<div class="tool-view" id="seamsView">
+  <div class="seam-finder" id="seamFinderContent"></div>
+</div>
+
+<!-- Interfacing Guide Mode -->
+<div class="tool-view" id="interfacingView">
+  <div class="interfacing-guide" id="interfacingContent"></div>
+</div>
+
+<!-- Yardage Estimator Mode -->
+<div class="tool-view" id="yardageView">
+  <div class="yardage-estimator" id="yardageContent"></div>
+</div>
+
+<!-- Troubleshooter Mode -->
+<div class="tool-view" id="troubleshootView">
+  <div class="troubleshooter" id="troubleshootContent"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PIPELINE VIEWS                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<!-- Pipeline Tab Bar (hidden until pipeline activated) -->
+<div class="pl-tabs" id="plTabs" style="display:none;">
+  <button class="pl-tab active" data-pl-tab="0"><span class="pl-tab-num">1</span> Choose</button>
+  <span class="pl-tab-arrow">→</span>
+  <button class="pl-tab" data-pl-tab="1"><span class="pl-tab-num">2</span> Setup</button>
+  <span class="pl-tab-arrow">→</span>
+  <button class="pl-tab" data-pl-tab="2"><span class="pl-tab-num">3</span> Build</button>
+  <span class="pl-tab-arrow">→</span>
+  <button class="pl-tab" data-pl-tab="3"><span class="pl-tab-num">4</span> Complete</button>
+</div>
+
+<!-- PANEL 0: CHOOSE -->
+<div class="pl-panel" id="plPanel-0">
+  <div class="pl-person-picker" id="plPersonPicker"></div>
+
+  <div class="pl-profile-tabs" id="plMatchTabs">
+    <button class="pl-profile-tab active" data-match="0">By Project</button>
+    <button class="pl-profile-tab" data-match="1">By Fabric</button>
+    <button class="pl-profile-tab" data-match="2">By Properties</button>
+  </div>
+
+  <div id="plMatchView-0">
+    <div class="pl-section-title" style="margin-bottom:4px;">Choose a project</div>
+    <p class="pl-annotation">Favorites from your profile appear first. Hidden projects are excluded.</p>
+    <div class="pl-project-grid" id="plProjectGrid"></div>
+    <div id="plFabricRecs" style="margin-top:20px; display:none;"></div>
+  </div>
+  <div id="plMatchView-1" style="display:none;">
+    <div class="pl-section-title" style="margin-bottom:4px;">Browse by fabric</div>
+    <p class="pl-annotation">Select a fiber to see varieties and matching stash entries. Filter by properties to find the right fabric.</p>
+    <div id="plByFabricContent"></div>
+  </div>
+  <div id="plMatchView-2" style="display:none;">
+    <div class="pl-section-title" style="margin-bottom:4px;">Search by properties</div>
+    <p class="pl-annotation">Set property thresholds to find fabrics that match your needs. Expand a fiber to see individual varieties ranked by match.</p>
+    <div id="plByPropsContent"></div>
+  </div>
+
+  <div id="plConvergence" style="display:none;"></div>
+
+  <div class="pl-bottom-actions">
+    <button class="pl-btn-secondary" id="plMatchBackBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Projects
+    </button>
+    <button class="pl-btn-primary" id="plToSetupBtn">
+      Confirm Setup
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- PANEL 1: SETUP -->
+<div class="pl-panel" id="plPanel-1">
+  <div id="plSetupContext"></div>
+  <div id="plSetupSections"></div>
+  <div id="plYardageImpact"></div>
+
+  <div class="pl-bottom-actions">
+    <button class="pl-btn-secondary" id="plSetupBackBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Choose
+    </button>
+    <button class="pl-btn-primary" id="plToBuildBtn">
+      Generate Build Guide
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- PANEL 2: BUILD -->
+<div class="pl-panel" id="plPanel-2">
+  <div id="plBuildContext"></div>
+  <div class="pl-build-progress" id="plBuildProgress">
+    <div class="pl-build-progress-label">BUILD PROGRESS</div>
+    <div class="pl-build-progress-bar"><div class="pl-build-progress-fill" id="plProgressFill"></div></div>
+    <div class="pl-build-progress-text">
+      <span id="plProgressText">0 of 0 steps</span>
+      <span id="plProgressPercent">0%</span>
+    </div>
+  </div>
+  <div class="pl-build-phases" id="plBuildPhases"></div>
+  <div id="plBuildSteps"></div>
+
+  <div class="pl-bottom-actions">
+    <button class="pl-btn-secondary" id="plBuildBackBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Setup
+    </button>
+    <button class="pl-btn-secondary" id="plPrintBuildBtn" title="Print project summary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print
+    </button>
+    <button class="pl-btn-primary" id="plToCompleteBtn">
+      Mark Complete
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- PANEL 3: COMPLETE -->
+<div class="pl-panel" id="plPanel-3">
+  <div id="plCompleteContent"></div>
+</div>
+
+</div>
+
+<div id="tool-tools" class="main-content" style="display:none;">
+<div class="site-header">
+  <h1>Natural Fabrics Guide</h1>
+  <span class="tagline">A sewist's companion to fibers, fabrics &amp; tools</span>
+</div>
+<!-- Machines Mode -->
+<div class="tool-view machine-view active" id="machinesView">
+  <div id="machinesContent"></div>
+</div>
+
+<!-- Cutting Mode -->
+<div class="tool-view machine-view" id="cuttingView">
+  <div id="cuttingContent"></div>
+</div>
+
+<!-- Measuring Mode -->
+<div class="tool-view machine-view" id="measuringView">
+  <div id="measuringContent"></div>
+</div>
+
+<!-- Pressing Mode -->
+<div class="tool-view machine-view" id="pressingView">
+  <div id="pressingContent"></div>
+</div>
+
+<!-- Marking Mode -->
+<div class="tool-view machine-view" id="markingView">
+  <div id="markingContent"></div>
+</div>
+
+<!-- Needles Mode -->
+<div class="tool-view machine-view" id="needlesView">
+  <div id="needlesContent"></div>
+</div>
+
+</div>
+
+<script src="js/router.js"></script>
+</body>
+</html>
