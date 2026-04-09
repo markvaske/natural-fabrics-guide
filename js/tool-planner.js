@@ -1538,10 +1538,11 @@ function renderProjectHome() {
 
   // Format a plan card
   function planCard(plan, showResume) {
-    const proj = PROJECT_CATALOG.find(p => p.id === plan.project);
-    const projName = proj ? proj.name : plan.project;
-    const personName = plan.personName || 'You';
-    const fiberName = FIBERS[plan.fiber] ? FIBERS[plan.fiber].name : plan.fiber;
+    const proj = PROJECT_CATALOG.find(p => p.id === (plan.projectId || plan.project));
+    const projName = proj ? proj.name : (plan.projectId || plan.project || 'Unknown');
+    const person = data.profiles.find(p => p.id === (plan.personId || plan.person));
+    const personName = person ? person.name : (plan.personName || 'You');
+    const fiberName = FIBERS[plan.fiber] ? FIBERS[plan.fiber].name : (plan.fiber || '?');
     const varietyName = plan.variety || '';
     const dateStr = plan.createdAt || '';
     const statusLabel = plan.status === 'complete' ? 'Completed' : 'In Progress';
@@ -1633,6 +1634,14 @@ function renderProjectHome() {
   document.getElementById('plHomeStartBtn').addEventListener('click', () => {
     plReset();
     activatePipeline(0);
+  });
+
+  // Wire up plan card clicks to open global profile detail
+  wrap.querySelectorAll('.pl-home-plan-card').forEach(card => {
+    card.addEventListener('click', () => {
+      gpPlansDetailId = card.dataset.planId;
+      openGlobalProfile('plans');
+    });
   });
 
   // Render catalog grid inside home
@@ -2685,17 +2694,18 @@ function renderProfileCards(data) {
   const detailEl = document.getElementById('plProfileView');
   if (!listEl || !detailEl) return;
 
-  const selectedId = detailEl.dataset.selectedPerson || (data.profiles[0] && data.profiles[0].id) || null;
+  const selectedId = (detailEl.dataset.selectedPerson && detailEl.dataset.selectedPerson !== 'null') 
+    ? detailEl.dataset.selectedPerson 
+    : (data.profiles[0] && data.profiles[0].id) || null;
   const AGE_LABELS = {adult:'Adult',teen:'Teen',child:'Child',baby:'Baby'};
   const groups = data.groups || [];
-  const tailorMode = data.profile && data.profile.tailorMode;
 
   // ── Build left panel ──
   if (plPeopleDrilledGroup) {
     plRenderGroupDrillIn(listEl, data, plPeopleDrilledGroup, selectedId);
   } else {
     plShowGroupDetail = false;
-    plRenderPeopleList(listEl, data, groups, selectedId, tailorMode);
+    plRenderPeopleList(listEl, data, groups, selectedId, true);
   }
 
   // ── Build right panel ──
@@ -2708,8 +2718,9 @@ function renderProfileCards(data) {
     const p = data.profiles.find(pr => pr.id === selectedId);
     if (p) {
       plRenderPersonDetail(detailEl, data, p, groups);
-  } else {
-    detailEl.innerHTML = '<div class="pl-people-empty"><div class="pl-people-empty-icon">👤</div><div class="pl-people-empty-title">Select a person</div><div class="pl-people-empty-text">Choose someone from the list to view their measurements, preferences, and project history.</div></div>';
+    } else {
+      detailEl.innerHTML = '<div class="pl-people-empty"><div class="pl-people-empty-icon">👤</div><div class="pl-people-empty-title">Select a person</div><div class="pl-people-empty-text">Choose someone from the list to view their measurements, preferences, and project history.</div></div>';
+    }
   }
 
   detailEl.dataset.selectedPerson = selectedId;
@@ -4449,7 +4460,8 @@ function renderStashGroups(groups, stash, filters) {
   });
 
   const wrap = document.getElementById('plStashView');
-  const expandedBolt = wrap?.dataset.expandedBolt || '';
+  if (!wrap) return '';
+  const expandedBolt = wrap.dataset.expandedBolt || '';
   const openFibers = wrap._openFibers || {};
 
   let html = '';
