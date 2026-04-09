@@ -22,6 +22,9 @@ _expose('plAddMemberToGroup', plAddMemberToGroup);
 _expose('plAddPersonToGroupPrompt', plAddPersonToGroupPrompt);
 _expose('plShowModal', plShowModal);
 _expose('plCloseModal', plCloseModal);
+_expose('plEditGroup', plEditGroup);
+_expose('plDeleteGroup', plDeleteGroup);
+_expose('plAddGroupProject', plAddGroupProject);
 _expose('navigateToTechnique', navigateToTechnique);
 _expose('ffSetSort', ffSetSort);
 _expose('ffToggleVariety', ffToggleVariety);
@@ -2674,7 +2677,8 @@ function plMeasLabel(key) {
 }
 
 // ── People view state ──
-let plPeopleDrilledGroup = null; // group id if drilled into a group, null otherwise
+let plPeopleDrilledGroup = null;
+let plShowGroupDetail = false; // true = show group overview, false = show person detail
 
 function renderProfileCards(data) {
   const listEl = document.getElementById('plPeopleList');
@@ -2690,13 +2694,20 @@ function renderProfileCards(data) {
   if (plPeopleDrilledGroup) {
     plRenderGroupDrillIn(listEl, data, plPeopleDrilledGroup, selectedId);
   } else {
+    plShowGroupDetail = false;
     plRenderPeopleList(listEl, data, groups, selectedId, tailorMode);
   }
 
-  // ── Build right panel (person detail) ──
-  const p = data.profiles.find(pr => pr.id === selectedId);
-  if (p) {
-    plRenderPersonDetail(detailEl, data, p, groups);
+  // ── Build right panel ──
+  if (plShowGroupDetail && plPeopleDrilledGroup) {
+    const group = groups.find(g => g.id === plPeopleDrilledGroup);
+    if (group) {
+      plRenderGroupDetail(detailEl, data, group);
+    }
+  } else {
+    const p = data.profiles.find(pr => pr.id === selectedId);
+    if (p) {
+      plRenderPersonDetail(detailEl, data, p, groups);
   } else {
     detailEl.innerHTML = '<div class="pl-people-empty"><div class="pl-people-empty-icon">👤</div><div class="pl-people-empty-title">Select a person</div><div class="pl-people-empty-text">Choose someone from the list to view their measurements, preferences, and project history.</div></div>';
   }
@@ -2752,6 +2763,7 @@ function plRenderPeopleList(listEl, data, groups, selectedId, showGroups) {
   // Attach click handlers
   listEl.querySelectorAll('.pl-people-li').forEach(li => {
     li.addEventListener('click', () => {
+      plShowGroupDetail = false;
       document.getElementById('plProfileView').dataset.selectedPerson = li.dataset.personId;
       renderProfileCards(loadUserData());
     });
@@ -2759,6 +2771,8 @@ function plRenderPeopleList(listEl, data, groups, selectedId, showGroups) {
   listEl.querySelectorAll('.pl-people-gi').forEach(gi => {
     gi.addEventListener('click', () => {
       plPeopleDrilledGroup = gi.dataset.groupId;
+      plShowGroupDetail = true;
+      document.getElementById('plProfileView').dataset.selectedPerson = '';
       renderProfileCards(loadUserData());
     });
   });
@@ -2812,12 +2826,14 @@ function plRenderGroupDrillIn(listEl, data, groupId, selectedId) {
   // Attach handlers
   listEl.querySelectorAll('.pl-people-li').forEach(li => {
     li.addEventListener('click', () => {
+      plShowGroupDetail = false;
       document.getElementById('plProfileView').dataset.selectedPerson = li.dataset.personId;
       renderProfileCards(loadUserData());
     });
   });
   listEl.querySelectorAll('[data-show-group]').forEach(gi => {
     gi.addEventListener('click', () => {
+      plShowGroupDetail = true;
       document.getElementById('plProfileView').dataset.selectedPerson = '';
       renderProfileCards(loadUserData());
     });
@@ -2934,6 +2950,195 @@ function plRenderPersonDetail(detailEl, data, p, groups) {
   detailEl.querySelectorAll('[data-action="add-to-group"]').forEach(btn => {
     btn.addEventListener('click', () => plAddPersonToGroupPrompt(btn.dataset.person));
   });
+}
+
+// ── Group detail panel ──
+function plRenderGroupDetail(detailEl, data, group) {
+  const members = (group.memberIds || []).map(id => data.profiles.find(p => p.id === id)).filter(Boolean);
+  const projects = group.projects || [];
+  const AGE_LABELS = {adult:'Adult',teen:'Teen',child:'Child',baby:'Baby'};
+
+  // Summary stats
+  const totalAssignments = projects.reduce((s, p) => s + (p.assignments || []).length, 0);
+  const doneAssignments = projects.reduce((s, p) => s + (p.assignments || []).filter(a => a.status === 'completed').length, 0);
+  const totalYardage = projects.reduce((s, p) => s + (p.assignments || []).reduce((ys, a) => ys + (a.yardage || 0), 0), 0);
+
+  let html = '';
+
+  // Header
+  html += '<div class="pl-people-dh">';
+  html += '<div style="width:52px;height:52px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;background:rgba(0,0,0,0.04);border:1px solid var(--border);">' + (group.icon || '📋') + '</div>';
+  html += '<div class="pl-people-dh-info"><div class="pl-people-dh-name">' + group.name + '</div>';
+  html += '<div class="pl-people-dh-sub">' + members.length + ' member' + (members.length !== 1 ? 's' : '') + (projects.length ? ' · ' + projects.length + ' project' + (projects.length !== 1 ? 's' : '') : '') + (group.created ? ' · Created ' + new Date(group.created).toLocaleDateString() : '') + '</div></div>';
+  html += '<div class="pl-people-dh-acts"><button class="pl-btn-primary" style="font-size:0.76rem;padding:7px 16px;" data-action="edit-group">Edit</button>';
+  html += '<button class="pl-btn-secondary" style="padding:7px 10px;" data-action="delete-group"><svg viewBox="0 0 24 24" fill="none" stroke="#c0392b" stroke-width="1.5" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>';
+  html += '</div></div>';
+
+  // Properties bar
+  if (group.deadline || projects.length || totalYardage) {
+    html += '<div class="pl-people-sz">';
+    if (group.deadline) html += '<div class="pl-people-sz-item"><div class="pl-people-sz-val">' + group.deadline + '</div><div class="pl-people-sz-label">Deadline</div></div>';
+    if (projects.length) html += '<div class="pl-people-sz-item"><div class="pl-people-sz-val">' + projects.length + '</div><div class="pl-people-sz-label">Projects</div></div>';
+    if (totalAssignments) html += '<div class="pl-people-sz-item"><div class="pl-people-sz-val">' + doneAssignments + ' / ' + totalAssignments + '</div><div class="pl-people-sz-label">Done</div></div>';
+    if (totalYardage) html += '<div class="pl-people-sz-item"><div class="pl-people-sz-val" style="color:var(--accent);">' + totalYardage.toFixed(1) + ' yd</div><div class="pl-people-sz-label">Total Fabric</div></div>';
+    html += '</div>';
+  }
+
+  // Notes
+  if (group.notes) {
+    html += '<div class="pl-people-card" style="margin-bottom:14px;"><div class="pl-people-card-title">Notes</div>';
+    html += '<div style="font-size:0.82rem;line-height:1.5;color:var(--ink-light);">' + group.notes + '</div></div>';
+  }
+
+  // Cards grid
+  html += '<div class="pl-people-cards">';
+
+  // Members card
+  html += '<div class="pl-people-card"><div class="pl-people-card-title">Members</div>';
+  if (members.length === 0) {
+    html += '<div style="font-size:0.78rem;color:var(--ink-faint);font-style:italic;">No members yet. Add people to this group.</div>';
+  } else {
+    members.forEach(m => {
+      const avColor = m.avatar?.color || '#888';
+      const avLetter = m.avatar?.letter || m.name.charAt(0).toUpperCase();
+      const sizeText = m.topSize ? 'Size ' + m.topSize.toUpperCase() : '';
+      const ageText = m.ageGroup ? AGE_LABELS[m.ageGroup] || '' : '';
+      const meta = [ageText, sizeText].filter(Boolean).join(' · ');
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.03);cursor:pointer;" data-member-click="' + m.id + '">';
+      html += '<div style="width:28px;height:28px;border-radius:7px;background:' + avColor + ';display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:white;">' + avLetter + '</div>';
+      html += '<div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">' + m.name + '</div>';
+      if (meta) html += '<div style="font-size:0.64rem;color:var(--ink-light);">' + meta + '</div>';
+      html += '</div>';
+      html += '<button style="background:none;border:none;cursor:pointer;color:var(--ink-faint);font-size:0.68rem;padding:4px;" data-remove-member="' + m.id + '" title="Remove from group">✕</button>';
+      html += '</div>';
+    });
+  }
+  html += '</div>';
+
+  // Group projects card (placeholder for now — shows what projects are assigned)
+  html += '<div class="pl-people-card"><div class="pl-people-card-title">Projects</div>';
+  if (projects.length === 0) {
+    html += '<div style="font-size:0.78rem;color:var(--ink-faint);font-style:italic;margin-bottom:10px;">No projects assigned to this group yet.</div>';
+  } else {
+    projects.forEach(proj => {
+      const catalog = window.PROJECT_CATALOG ? window.PROJECT_CATALOG.find(c => c.id === proj.projectId) : null;
+      const pName = catalog ? catalog.name : proj.projectId;
+      const assignCount = (proj.assignments || []).length;
+      const doneCount = (proj.assignments || []).filter(a => a.status === 'completed').length;
+      html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.03);font-size:0.82rem;">';
+      html += '<span>' + pName + '</span>';
+      html += '<span style="font-size:0.72rem;font-weight:600;color:' + (doneCount === assignCount ? 'var(--accent)' : 'var(--amber)') + ';">' + doneCount + '/' + assignCount + ' done</span>';
+      html += '</div>';
+    });
+  }
+  html += '<div style="margin-top:10px;"><button class="pl-btn-secondary" style="font-size:0.72rem;padding:5px 12px;width:100%;text-align:center;" data-action="add-group-project">+ Add Project</button></div>';
+  html += '</div>';
+
+  // Contact info (if template is client)
+  if (group.contactInfo) {
+    html += '<div class="pl-people-card"><div class="pl-people-card-title">Contact</div>';
+    html += '<div style="font-size:0.82rem;color:var(--ink-light);">' + group.contactInfo + '</div></div>';
+  }
+
+  html += '</div>'; // close cards grid
+
+  detailEl.innerHTML = html;
+
+  // Attach handlers
+  detailEl.querySelectorAll('[data-member-click]').forEach(el => {
+    el.addEventListener('click', () => {
+      plShowGroupDetail = false;
+      detailEl.dataset.selectedPerson = el.dataset.memberClick;
+      renderProfileCards(loadUserData());
+    });
+  });
+  detailEl.querySelectorAll('[data-remove-member]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      var d = loadUserData();
+      removePersonFromGroup(d, group.id, btn.dataset.removeMember);
+      renderProfileCards(loadUserData());
+    });
+  });
+  var editBtn = detailEl.querySelector('[data-action="edit-group"]');
+  if (editBtn) editBtn.addEventListener('click', () => plEditGroup(group.id));
+  var deleteBtn = detailEl.querySelector('[data-action="delete-group"]');
+  if (deleteBtn) deleteBtn.addEventListener('click', () => plDeleteGroup(group.id));
+  var addProjBtn = detailEl.querySelector('[data-action="add-group-project"]');
+  if (addProjBtn) addProjBtn.addEventListener('click', () => plAddGroupProject(group.id));
+}
+
+// ── Group edit ──
+function plEditGroup(groupId) {
+  var data = loadUserData();
+  var group = (data.groups || []).find(g => g.id === groupId);
+  if (!group) return;
+
+  var html = '<div class="pl-modal-header"><div class="pl-modal-title">Edit Group</div><button class="pl-modal-close" id="plModalClose">✕</button></div>';
+  html += '<div style="display:flex;flex-direction:column;gap:12px;">';
+  html += '<div><label style="font-size:0.72rem;font-weight:600;color:var(--ink-light);display:block;margin-bottom:4px;">Name</label>';
+  html += '<input type="text" id="plGroupEditName" value="' + (group.name || '') + '" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.85rem;"></div>';
+  html += '<div><label style="font-size:0.72rem;font-weight:600;color:var(--ink-light);display:block;margin-bottom:4px;">Icon (emoji)</label>';
+  html += '<input type="text" id="plGroupEditIcon" value="' + (group.icon || '📋') + '" style="width:60px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:1.2rem;text-align:center;"></div>';
+  html += '<div><label style="font-size:0.72rem;font-weight:600;color:var(--ink-light);display:block;margin-bottom:4px;">Deadline</label>';
+  html += '<input type="text" id="plGroupEditDeadline" value="' + (group.deadline || '') + '" placeholder="e.g. June 15, 2027" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.85rem;"></div>';
+  html += '<div><label style="font-size:0.72rem;font-weight:600;color:var(--ink-light);display:block;margin-bottom:4px;">Notes</label>';
+  html += '<textarea id="plGroupEditNotes" rows="3" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.85rem;resize:vertical;">' + (group.notes || '') + '</textarea></div>';
+  html += '<div><label style="font-size:0.72rem;font-weight:600;color:var(--ink-light);display:block;margin-bottom:4px;">Contact Info</label>';
+  html += '<input type="text" id="plGroupEditContact" value="' + (group.contactInfo || '') + '" placeholder="Phone, email, address..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.85rem;"></div>';
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">';
+  html += '<button class="pl-btn-secondary" id="plGroupEditCancel" style="padding:8px 16px;">Cancel</button>';
+  html += '<button class="pl-btn-primary" id="plGroupEditSave" style="padding:8px 20px;">Save</button>';
+  html += '</div></div>';
+
+  plShowModal(html);
+  document.getElementById('plModalClose').addEventListener('click', plCloseModal);
+  document.getElementById('plGroupEditCancel').addEventListener('click', plCloseModal);
+  document.getElementById('plGroupEditSave').addEventListener('click', function() {
+    var d = loadUserData();
+    updateGroup(d, groupId, {
+      name: document.getElementById('plGroupEditName').value.trim() || 'Untitled Group',
+      icon: document.getElementById('plGroupEditIcon').value.trim() || '📋',
+      deadline: document.getElementById('plGroupEditDeadline').value.trim(),
+      notes: document.getElementById('plGroupEditNotes').value.trim(),
+      contactInfo: document.getElementById('plGroupEditContact').value.trim()
+    });
+    plCloseModal();
+    renderProfileCards(loadUserData());
+  });
+}
+
+// ── Group delete ──
+function plDeleteGroup(groupId) {
+  // Use a confirmation modal instead of confirm()
+  plShowModal(
+    '<div class="pl-modal-header"><div class="pl-modal-title">Delete Group</div><button class="pl-modal-close" id="plModalClose">✕</button></div>' +
+    '<div class="pl-modal-desc">This will delete the group. People in the group will not be deleted.</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+    '<button class="pl-btn-secondary" id="plDeleteGroupCancel">Cancel</button>' +
+    '<button class="pl-btn-primary" id="plDeleteGroupConfirm" style="background:#c0392b;border-color:#c0392b;">Delete</button></div>'
+  );
+  document.getElementById('plModalClose').addEventListener('click', plCloseModal);
+  document.getElementById('plDeleteGroupCancel').addEventListener('click', plCloseModal);
+  document.getElementById('plDeleteGroupConfirm').addEventListener('click', function() {
+    var d = loadUserData();
+    removeGroup(d, groupId);
+    plCloseModal();
+    plPeopleDrilledGroup = null;
+    plShowGroupDetail = false;
+    renderProfileCards(loadUserData());
+  });
+}
+
+// ── Add project to group (placeholder) ──
+function plAddGroupProject(groupId) {
+  // TODO: full project picker from PROJECT_CATALOG
+  plShowModal(
+    '<div class="pl-modal-header"><div class="pl-modal-title">Add Project</div><button class="pl-modal-close" id="plModalClose">✕</button></div>' +
+    '<div class="pl-modal-desc">Project assignment to groups is coming soon. This will let you pick a project from the catalog, assign members, and track yardage.</div>' +
+    '<div style="text-align:center;padding:20px;"><div style="font-size:2rem;opacity:0.3;margin-bottom:8px;">🧵</div><div style="font-size:0.78rem;color:var(--ink-faint);">Group project workspace — planned feature</div></div>'
+  );
+  document.getElementById('plModalClose').addEventListener('click', plCloseModal);
 }
 
 // Grouped measurements (Upper Body, Core, Arms, Lower Body)
@@ -3219,17 +3424,6 @@ function plShowEditForm(profileId) {
             <button class="pl-option-pill${p.ageGroup === 'teen' ? ' selected' : ''}" data-val="teen">Teen</button>
             <button class="pl-option-pill${p.ageGroup === 'child' ? ' selected' : ''}" data-val="child">Child</button>
             <button class="pl-option-pill${p.ageGroup === 'baby' ? ' selected' : ''}" data-val="baby">Baby</button>
-          </div>
-        </div>
-      </div>
-      <div class="pl-form-row">
-        <div class="pl-form-label"><div class="pl-form-label-main">Skill Level</div></div>
-        <div class="pl-form-control">
-          <div class="pl-option-pills" data-edit-group="skill-${profileId}">
-            ${['none','beginner','intermediate','advanced','expert'].map(s => {
-              const labels = {none:'Non-sewist',beginner:'Beginner',intermediate:'Intermediate',advanced:'Advanced',expert:'Expert'};
-              return `<button class="pl-option-pill${p.skill === s ? ' selected' : ''}" data-val="${s}">${labels[s]}</button>`;
-            }).join('')}
           </div>
         </div>
       </div>
@@ -3568,8 +3762,6 @@ function plSaveProfile(profileId) {
   const editWrap = document.getElementById('plEdit-' + profileId);
 
   const name = document.getElementById('plEditName-' + profileId).value.trim() || 'Unnamed';
-  const skillBtn = editWrap.querySelector('[data-edit-group="skill-' + profileId + '"] .pl-option-pill.selected');
-  const skill = skillBtn ? skillBtn.dataset.val : 'intermediate';
   const fitBtn = editWrap.querySelector('[data-edit-group="fit-' + profileId + '"] .pl-option-pill.selected');
   const fit = fitBtn ? fitBtn.dataset.val : 'standard';
   const topSize = document.getElementById('plEditTopSize-' + profileId).value;
@@ -3610,7 +3802,7 @@ function plSaveProfile(profileId) {
   }
 
   updateProfile(data, profileId, {
-    name, skill, fit, preferredSize, topSize, bottomSize, shoeSize, cupSize, measurements, favoriteFibers, sensitivities, favoriteColors, gender, ageGroup, photo,
+    name, fit, preferredSize, topSize, bottomSize, shoeSize, cupSize, measurements, favoriteFibers, sensitivities, favoriteColors, gender, ageGroup, photo,
     avatar: { letter: name.charAt(0).toUpperCase(), color: data.profiles.find(p => p.id === profileId)?.avatar?.color || '#5B8C6B' }
   });
 
@@ -4076,7 +4268,7 @@ function renderStashEquipment(data, category) {
     const owned = (ownedTools[toolCat] || []).includes(item.k);
     const urlKey = toolCat + ':' + item.k;
     const urlVal = urls[urlKey] || '';
-    html += '<div class="pl-stash-tool-card' + (owned ? '' : ' missing') + '"><div class="pl-stash-tool-check ' + (owned ? 'yes' : 'no') + '">' + (owned ? '✓' : '○') + '</div><div class="pl-stash-tool-info"><div class="pl-stash-tool-name">' + item.n + '</div>';
+    html += '<div class="pl-stash-tool-card' + (owned ? '' : ' missing') + '" data-tool-cat="' + toolCat + '" data-tool-key="' + item.k + '" style="cursor:pointer;"><div class="pl-stash-tool-check ' + (owned ? 'yes' : 'no') + '">' + (owned ? '✓' : '○') + '</div><div class="pl-stash-tool-info"><div class="pl-stash-tool-name">' + item.n + '</div>';
     if (item.d) html += '<div class="pl-stash-tool-detail">' + item.d + '</div>';
     html += '</div>';
     if (urlVal) html += '<a href="' + urlVal + '" target="_blank" style="font-size:0.68rem;color:var(--accent);text-decoration:none;">Manual ↗</a>';
@@ -4084,6 +4276,25 @@ function renderStashEquipment(data, category) {
   });
   html += '</div>';
   wrap.innerHTML = html;
+
+  // Toggle tool ownership on click
+  wrap.querySelectorAll('.pl-stash-tool-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.tagName === 'A') return; // Don't toggle when clicking manual link
+      var d = loadUserData();
+      var cat = card.dataset.toolCat;
+      var key = card.dataset.toolKey;
+      if (!d.profile.ownedTools[cat]) d.profile.ownedTools[cat] = [];
+      var idx = d.profile.ownedTools[cat].indexOf(key);
+      if (idx >= 0) {
+        d.profile.ownedTools[cat].splice(idx, 1);
+      } else {
+        d.profile.ownedTools[cat].push(key);
+      }
+      saveUserData(d);
+      renderStashWorkshop(loadUserData());
+    });
+  });
 }
 
 function renderStashView(data) {
