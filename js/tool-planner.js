@@ -4310,6 +4310,7 @@ function renderStashEquipment(data, category) {
 
 function renderStashView(data) {
   const wrap = document.getElementById('plStashView');
+  if (!wrap) return;
   const stash = data.stash || [];
   const groups = getStashGroups(stash);
   const totalYd = stash.reduce((s, e) => s + (e.yardage || 0), 0);

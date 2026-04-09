@@ -191,6 +191,7 @@ function shellOpenEditor(target) {
         if (typeof window.renderGpTools === 'function') window.renderGpTools();
         if (typeof window.renderGpPlans === 'function') window.renderGpPlans();
       }
+      if (typeof gpSwitchSeg === 'function') gpSwitchSeg('profile');
     }
 
     _editorActive = target;
