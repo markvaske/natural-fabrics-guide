@@ -2,53 +2,64 @@
 
 Follow V3.3 Spec (Notes DB: `32fb53061c768151abc2e381d11cccbb`) for all standard procedures.
 
-## Project-Specific Conventions
+**Start here:** Read `AGENTS.md` first each session, then `work/current-state.md`, then this file.
 
-### Architecture
-- **SPA**: Single `index.html` entry point with hash routing (`#reference`, `#projects`, `#tools`)
-- **Tool scripts**: `js/tool-reference.js` (~93 KB), `js/tool-planner.js` (~366 KB), `js/tool-tools.js` (~70 KB) — loaded on demand by router
-- **Platform layer**: `platform.js` (~190 lines, user data CRUD + weight utils) + `platform.css` (~250 lines, design tokens + sidebar + layout)
-- **Data layer**: `data/fibers.js` (~247 KB), `data/projects.js` (~241 KB), `data/tools.js` (~153 KB), `data/machines.js` (~48 KB) — loaded async via `js/data-loader.js`
-- **Shared JS**: `js/data-loader.js` (async loader), `js/storage.js` (DataStore abstraction), `js/shell.js` (unified sidebar), `js/sewing-utils.js` (derived props), `js/scoring.js` (scoring engine), `js/router.js` (hash router)
-- **Sewing styles**: `shared.css` (~5,200 lines, sewing-specific styles)
+---
+
+## Architecture
+
+- **SPA**: Single `index.html`, hash routing (`#reference`, `#projects`, `#tools`)
+- **Tool scripts**: `js/tool-reference.js` (~93 KB), `js/tool-planner.js` (~366 KB), `js/tool-tools.js` (~70 KB) — lazy-loaded by `js/router.js`
+- **Platform layer**: `platform.js` (user data CRUD + weight utils) + `platform.css` (design tokens + sidebar)
+- **Data layer**: `data/fibers.js`, `data/projects.js`, `data/tools.js`, `data/machines.js` — loaded async via `js/data-loader.js`
+- **Shared JS**: `js/shell.js` (sidebar), `js/storage.js` (DataStore), `js/sewing-utils.js` (derived props), `js/scoring.js` (scoring engine)
+- **Styles**: `shared.css` (~5,200 lines, sewing-specific — legacy, do not grow)
 - No build step, no frameworks — vanilla HTML/CSS/JS
 - Chart.js CDN: `https://artifactcdn.diabrowser.engineering/ajax/libs/Chart.js/chart.umd.js`
-- System serif font stack: `'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif`
-- Migration guide: `MIGRATION-v4.md` with `[MIG-xxx]` tags for all code regions
+- Font: `'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif`
 
-### CSS Namespacing
-- `ff-` Fabric Finder
-- `cons-` Construction
-- `pl-` Pipeline (Choose, Setup, Build, Complete)
-- `gp-` Global Profile panel
-- `ob-` Onboarding wizard
-- `seg-` Segmented controls (shared)
-- `tools-` Tools modes
+Full file inventory and feature status → `work/current-state.md`
+CSS token table and enforcement rules → `work/design-rules.md`
 
-### Data Layer
-- `FIBERS` is the single source of truth for all fiber/variety data — never duplicate it
-- Shrinkage is stored "bad-high" — use `propDisplayValue()` to invert for display
-- 20 fibers, ~110+ varieties, 13 scored properties (0–100): breathability, absorbency, drape, wrinkleResistance, durability, shrinkage, heatTolerance, stretch, pillingResistance, colorfastness, structure, washability, softness
-- User data: `loadUserData()`/`saveUserData()` wrappers delegate to `store` (global DataStore in `js/storage.js`)
-- Schema versioning: `_schemaVersion` field, auto-migrations in `SCHEMA_MIGRATIONS` object
-- Two-level user model: `profile` (singleton sewist identity + tools) and `profiles[]` (people roster for sizing)
-- To swap backends: change `var store = LocalStore;` to `var store = ApiStore;` in `js/storage.js`
+## CSS Namespacing
+- `ff-` Fabric Finder · `cons-` Construction · `pl-` Pipeline · `gp-` Global Profile
+- `ob-` Onboarding · `seg-` Segmented controls · `tools-` Tools modes
 
-### File Paths
-- Project root: `work/artifacts/natural_fabrics_guide/`
-- `REFERENCE.md` is a redirect pointer — all docs live in `Project.md`
+## Data Layer
+- `FIBERS` is the single source of truth — never duplicate fiber data
+- Shrinkage stored bad-high — use `propDisplayValue()` from `js/sewing-utils.js` to invert for display
+- 20 fibers, ~110+ varieties, 13 scored properties (0–100)
+- Two-level user model: `profile` (singleton sewist identity) and `profiles[]` (people roster)
+- Schema versioning: `_schemaVersion` + `SCHEMA_MIGRATIONS` in `js/storage.js`
+- Backend swap: change `var store = LocalStore` → `var store = ApiStore` in `js/storage.js`
+
+## Definition of Done
+
+Before marking any initiative complete:
+1. Feature reachable from prod UI without dev flags or URL hacks
+2. Replaced legacy code fully removed — not commented out, not `if (el)` guarded
+3. `work/current-state.md` updated if architecture or file inventory changed
+4. New CSS follows `work/design-rules.md` (tokens, namespace prefix, no inline style)
+5. Browser console clean — no errors or warnings from changed code
 
 ## Counters & State
-- Prompt counter: 48
-- Next maintenance: prompt 50
+- Prompt counter: 50
+- Next maintenance: prompt 55
 - Concept learning queue: 0
-- Current version: v5.2.0 (People view redesign — sidebar/detail, groups, modals)
-- Current initiative: UI Redesign — People v1 implemented, Stash/Workshop + Profile pending (Spec: `33cb53061c7681b6a5e0f6a00d4345e2`)
-- Next major initiative: Research — Validate Skill Difficulty Tiers (Task: `332b53061c768186ba66e964d3047e2a`)
+- Current version: v5.3.0 (Groups + Stash Workshop + People redesign)
+- Current initiative: UI Redesign — Profile card grid + group project workspace + two-way links. Spec: `33cb53061c7681b6a5e0f6a00d4345e2`
+- Next major initiative: Dyeing tool integration
+
+## Git / Sync
+- **Local stable repo**: `~/Documents/Projects/NFG`
+- **GitHub remote**: `https://github.com/markvaske/natural-fabrics-guide.git`
+- `nfgpull` — Dia artifact → NFG · `nfgpush` — NFG → Dia artifact · `nfgsave "msg"` — commit + push
+- **Synced**: `index.html`, `platform.js`, `platform.css`, `shared.css`, `AGENTS.md`, `Project.md`, `MIGRATION-v4.md`, `REFERENCE.md`, `CLAUDE.md`, `js/`, `data/`, `work/`
+- **Not synced**: `sync.sh`, `context/`, `.git/`
 
 ## Project Notion IDs
 - Project entry: `32fb53061c7681e18389df5385afcfaa`
-- Site Construction Reference (Build Guide): `32fb53061c7681fd9690f67be3d16cb7`
+- Build Guide: `32fb53061c7681fd9690f67be3d16cb7`
 - Technical Decisions: `32fb53061c76817aa4a9cb1d19494c61`
 - Design Guide: `32fb53061c7681ad8625cdba83aab24f`
 - Publishing Guide: `32fb53061c768127816def6fccf462f4`
